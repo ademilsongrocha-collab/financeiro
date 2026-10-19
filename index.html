@@ -493,4 +493,29 @@
           {/* Barra de Navegação Inferior */}
           <nav className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-slate-300 p-2 z-40 shadow-lg">
             <div className="max-w-3xl mx-auto grid grid-cols-4 gap-1">
-              <button onClick
+              <button onClick={() => setActiveTab('resumo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'resumo' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Wallet />
+                <span className="text-xs mt-1">Resumo</span>
+              </button>
+              <button onClick={() => setActiveTab('novo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'novo' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
+                <Icons.PlusCircle />
+                <span className="text-xs mt-1">+ Anotar</span>
+              </button>
+              <button onClick={() => setActiveTab('historico')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'historico' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Calendar />
+                <span className="text-xs mt-1">Contas</span>
+              </button>
+              <button onClick={() => setActiveTab('familia')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'familia' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Users />
+                <span className="text-xs mt-1">Família</span>
+              </button>
+            </div>
+          </nav>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
