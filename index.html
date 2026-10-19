@@ -13,6 +13,10 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- Bibliotecas para Leitura de PDF e OCR de Imagem/Foto de Extrato -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
   <style>
     body { 
       font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -29,116 +33,130 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
-    // Servidor de sincronização em nuvem gratuito e público (KV Store)
-    const SYNC_SERVER = "https://api.counterapi.dev/v1"; 
+    // Configurar worker do PDF.js
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
 
     const Icons = {
       Wallet: () => <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>,
       TrendingUp: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>,
       TrendingDown: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>,
       Users: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
-      User: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
       Volume2: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z" /></svg>,
       VolumeX: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>,
       PlusCircle: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
       Trash2: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
       Calendar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-      Key: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
-      Cloud: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+      Mic: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
+      Camera: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+      Piggy: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
     };
 
     const CATEGORIES = {
       income: [
-        { id: 'Salario', label: 'Salário / Trabalho', color: 'bg-blue-100 text-blue-800' },
-        { id: 'Aposentadoria', label: 'Aposentadoria / INSS', color: 'bg-emerald-100 text-emerald-800' },
-        { id: 'Pensao', label: 'Pensão / Benefício', color: 'bg-teal-100 text-teal-800' },
-        { id: 'Aluguel', label: 'Renda de Aluguel', color: 'bg-indigo-100 text-indigo-800' },
-        { id: 'Investimentos', label: 'Rendimentos', color: 'bg-amber-100 text-amber-800' },
-        { id: 'OutrasReceitas', label: 'Outras Entradas', color: 'bg-slate-100 text-slate-800' }
+        { id: 'Salario', label: 'Salário / Trabalho' },
+        { id: 'Aposentadoria', label: 'Aposentadoria / INSS' },
+        { id: 'Pensao', label: 'Pensão / Benefício' },
+        { id: 'Aluguel', label: 'Aluguel Recebido' },
+        { id: 'Investimentos', label: 'Rendimentos' },
+        { id: 'OutrasReceitas', label: 'Outras Entradas' }
       ],
       expense: [
-        { id: 'Remedios', label: 'Remédios & Farmácia', color: 'bg-rose-100 text-rose-800' },
-        { id: 'Mercado', label: 'Supermercado & Feira', color: 'bg-amber-100 text-amber-800' },
-        { id: 'ContasCasa', label: 'Água, Luz e Gás', color: 'bg-orange-100 text-orange-800' },
-        { id: 'Moradia', label: 'Aluguel / Condomínio', color: 'bg-indigo-100 text-indigo-800' },
-        { id: 'Telefone', label: 'Celular & Internet', color: 'bg-sky-100 text-sky-800' },
-        { id: 'Saude', label: 'Plano de Saúde & Exames', color: 'bg-red-100 text-red-800' },
-        { id: 'Transporte', label: 'Transporte & Carro', color: 'bg-cyan-100 text-cyan-800' },
-        { id: 'OutrasDespesas', label: 'Outros Gastos', color: 'bg-slate-100 text-slate-800' }
+        { id: 'Remedios', label: 'Remédios & Farmácia' },
+        { id: 'Mercado', label: 'Supermercado & Feira' },
+        { id: 'ContasCasa', label: 'Água, Luz e Gás' },
+        { id: 'Moradia', label: 'Aluguel / Condomínio' },
+        { id: 'Telefone', label: 'Celular & Internet' },
+        { id: 'Saude', label: 'Plano de Saúde' },
+        { id: 'Transporte', label: 'Transporte & Carro' },
+        { id: 'OutrasDespesas', label: 'Outros Gastos' }
       ]
     };
 
     function App() {
       const [userName, setUserName] = useState(() => localStorage.getItem('usuario_nome') || 'Fernanda');
       const [familyCode, setFamilyCode] = useState(() => localStorage.getItem('familia_codigo') || 'FAM-7481');
-      const [inputCode, setInputCode] = useState('');
       const [audioEnabled, setAudioEnabled] = useState(true);
-      const [syncStatus, setSyncStatus] = useState('Nuvem Ativa');
 
       const [transactions, setTransactions] = useState(() => {
         try {
           const saved = localStorage.getItem('planejamento_facil_db');
           return saved ? JSON.parse(saved) : [
-            { id: '1', description: 'Entrada Inicial', amount: 12000, type: 'income', category: 'Salario', date: new Date().toISOString().split('T')[0], author: 'Fernanda', isFamily: true }
+            { id: '1', description: 'Entrada Salário', amount: 12000, type: 'income', category: 'Salario', date: new Date().toISOString().split('T')[0], author: 'Fernanda', isFamily: true }
           ];
         } catch {
           return [];
         }
       });
 
+      // Módulo de Investimentos
+      const [investments, setInvestments] = useState(() => {
+        try {
+          const saved = localStorage.getItem('planejamento_investimentos_db');
+          return saved ? JSON.parse(saved) : [
+            { id: 'i1', name: 'Tesouro Selic 2029', type: 'Renda Fixa', amount: 15000, yieldRate: '10.75% a.a.' },
+            { id: 'i2', name: 'CDB Banco Inter Liquidez Diária', type: 'CDB', amount: 8500, yieldRate: '100% CDI' }
+          ];
+        } catch {
+          return [];
+        }
+      });
+
+      const [invName, setInvName] = useState('');
+      const [invAmount, setInvAmount] = useState('');
+      const [invType, setInvType] = useState('Renda Fixa');
+      const [invYield, setInvYield] = useState('10% a.a.');
+
       const [viewFilter, setViewFilter] = useState('tudo');
       const [zoomLevel, setZoomLevel] = useState('large');
-      const [activeTab, setActiveTab] = useState('resumo');
+      const [activeTab, setActiveTab] = useState('resumo'); // 'resumo' | 'novo' | 'investimentos' | 'historico' | 'familia'
 
-      // Estado do formulário
+      // Estado do formulário de transações
       const [desc, setDesc] = useState('');
       const [val, setVal] = useState('');
       const [txType, setTxType] = useState('expense');
       const [txCat, setTxCat] = useState('Remedios');
       const [isFamilyScope, setIsFamilyScope] = useState(true);
 
-      // Persistência local imediata
+      // Estado de gravação de áudio e leitura de extratos
+      const [isListening, setIsListening] = useState(false);
+      const [isProcessingDoc, setIsProcessingDoc] = useState(false);
+      const [docStatus, setDocStatus] = useState('');
+
       useEffect(() => {
         localStorage.setItem('planejamento_facil_db', JSON.stringify(transactions));
+        localStorage.setItem('planejamento_investimentos_db', JSON.stringify(investments));
         localStorage.setItem('usuario_nome', userName);
         localStorage.setItem('familia_codigo', familyCode);
-      }, [transactions, userName, familyCode]);
+      }, [transactions, investments, userName, familyCode]);
 
-      // Sincronização em Nuvem em Tempo Real (usando endpoint aberto com hash de código)
+      // Sincronização em Nuvem (KV store pública por código da família)
       const syncWithCloud = async (codeToSync, currentList) => {
         if (!codeToSync) return;
         try {
-          const cleanCode = codeToSync.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-          const res = await fetch(`https://kvdb.io/6P4k8e7N2XbK9U3wL5qR1/${cleanCode}`, {
+          const clean = codeToSync.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          await fetch(`https://kvdb.io/6P4k8e7N2XbK9U3wL5qR1/${clean}`, {
             method: 'POST',
             body: JSON.stringify(currentList)
           });
-          if (res.ok) {
-            setSyncStatus('Sincronizado');
-          }
-        } catch (e) {
-          setSyncStatus('Salvo Local');
-        }
+        } catch (e) {}
       };
 
-      // Leitura da nuvem periódica a cada 4 segundos para receber contas do outro celular
       useEffect(() => {
         if (!familyCode) return;
-        const cleanCode = familyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const clean = familyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
         const fetchRemote = async () => {
           try {
-            const res = await fetch(`https://kvdb.io/6P4k8e7N2XbK9U3wL5qR1/${cleanCode}`);
+            const res = await fetch(`https://kvdb.io/6P4k8e7N2XbK9U3wL5qR1/${clean}`);
             if (res.ok) {
-              const remoteData = await res.json();
-              if (Array.isArray(remoteData) && remoteData.length > 0) {
-                setTransactions(remoteData);
-                setSyncStatus('Sincronizado');
+              const remote = await res.json();
+              if (Array.isArray(remote) && remote.length > 0) {
+                setTransactions(remote);
               }
             }
-          } catch (e) {
-            // Modo local ativo caso esteja sem rede
-          }
+          } catch (e) {}
         };
 
         fetchRemote();
@@ -157,25 +175,146 @@
         } catch(e) {}
       };
 
-      const generateNewFamilyCode = () => {
-        const randomNum = Math.floor(1000 + Math.random() * 9000);
-        const code = `FAM-${randomNum}`;
-        setFamilyCode(code);
-        syncWithCloud(code, transactions);
-        speakText(`Novo código de família criado: ${code}`);
-        alert(`O código da sua família é: ${code}\nColoque este mesmo código no outro celular.`);
+      const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+      // 1. RECONHECIMENTO DE VOZ INTELIGENTE (FALAR O LANÇAMENTO)
+      const handleVoiceInput = () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert('Reconhecimento de voz não é suportado pelo seu navegador atual. Use o Google Chrome.');
+          return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          speakText('Pode falar o que gastou ou recebeu.');
+        };
+
+        recognition.onresult = (event) => {
+          const text = event.results[0][0].transcript.toLowerCase();
+          setIsListening(false);
+
+          // Extrair valor numérico dito
+          const numberMatch = text.match(/\d+([,\.]\d+)?/);
+          let extractedAmount = '';
+          if (numberMatch) {
+            extractedAmount = numberMatch[0].replace(',', '.');
+          }
+
+          // Detectar se é receita ou despesa
+          let type = 'expense';
+          if (text.includes('ganhei') || text.includes('recebi') || text.includes('salário') || text.includes('aposentadoria') || text.includes('depósito')) {
+            type = 'income';
+          }
+
+          // Detectar categoria
+          let cat = 'OutrasDespesas';
+          if (text.includes('remédio') || text.includes('farmácia')) cat = 'Remedios';
+          else if (text.includes('mercado') || text.includes('compras') || text.includes('feira')) cat = 'Mercado';
+          else if (text.includes('luz') || text.includes('água') || text.includes('gás')) cat = 'ContasCasa';
+          else if (text.includes('aluguel') || text.includes('condomínio')) cat = 'Moradia';
+          else if (text.includes('salário')) cat = 'Salario';
+          else if (text.includes('aposentadoria') || text.includes('inss')) cat = 'Aposentadoria';
+
+          setDesc(text.charAt(0).toUpperCase() + text.slice(1));
+          if (extractedAmount) setVal(extractedAmount);
+          setTxType(type);
+          setTxCat(cat);
+
+          speakText(`Entendi: ${text}. Ajuste se necessário e toque em Salvar.`);
+          setActiveTab('novo');
+        };
+
+        recognition.onerror = () => {
+          setIsListening(false);
+          speakText('Não consegui ouvir. Tente falar novamente mais perto do aparelho.');
+        };
+
+        recognition.start();
       };
 
-      const handleConnectFamily = (e) => {
-        e.preventDefault();
-        if (!inputCode.trim()) return;
-        const code = inputCode.trim().toUpperCase();
-        setFamilyCode(code);
-        setInputCode('');
-        speakText(`Conectado à família ${code}`);
-        alert(`Conectado à família: ${code}! Suas contas começarão a sincronizar.`);
+      // 2. LEITURA DE PDF E IMAGEM / EXTRATO BANCÁRIO
+      const handleFileScan = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setIsProcessingDoc(true);
+        setDocStatus('Lendo documento...');
+        speakText('Processando documento bancário, por favor aguarde.');
+
+        try {
+          let fullText = '';
+
+          if (file.type === 'application/pdf') {
+            // Leitura de PDF
+            const fileReader = new FileReader();
+            fileReader.onload = async function () {
+              const typedarray = new Uint8Array(this.result);
+              const pdf = await pdfjsLib.getDocument(typedarray).promise;
+              for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+              }
+              processExtractedText(fullText, file.name);
+            };
+            fileReader.readAsArrayBuffer(file);
+          } else {
+            // Leitura de Imagem / Comprovante com Tesseract OCR
+            const result = await Tesseract.recognize(file, 'por');
+            fullText = result.data.text;
+            processExtractedText(fullText, file.name);
+          }
+        } catch (err) {
+          setIsProcessingDoc(false);
+          setDocStatus('');
+          alert('Erro ao processar o arquivo. Certifique-se de que a imagem ou PDF está legível.');
+        }
       };
 
+      const processExtractedText = (text, fileName) => {
+        setIsProcessingDoc(false);
+        setDocStatus('');
+
+        // Procurar valores monetários (ex: R$ 150,00 ou 150,00)
+        const regexValores = /(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})/gi;
+        const matches = text.match(regexValores);
+
+        let finalValue = '';
+        if (matches && matches.length > 0) {
+          // Pega o maior valor encontrado ou o primeiro valor de transação
+          const cleanVals = matches.map(m => parseFloat(m.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()));
+          const maxVal = Math.max(...cleanVals);
+          if (!isNaN(maxVal)) finalValue = maxVal.toString();
+        }
+
+        let cat = 'OutrasDespesas';
+        let type = 'expense';
+
+        const lower = text.toLowerCase();
+        if (lower.includes('farmacia') || lower.includes('drogaria') || lower.includes('medicamento')) cat = 'Remedios';
+        else if (lower.includes('supermercado') || lower.includes('hipermercado') || lower.includes('alimentos')) cat = 'Mercado';
+        else if (lower.includes('energia') || lower.includes('enel') || lower.includes('sanepar') || lower.includes('sabesp') || lower.includes('luz') || lower.includes('agua')) cat = 'ContasCasa';
+        else if (lower.includes('rendimento') || lower.includes('transferencia recebida') || lower.includes('salario')) {
+          type = 'income';
+          cat = 'Salario';
+        }
+
+        setDesc(`Extrato: ${fileName.replace(/\.[^/.]+$/, "")}`);
+        if (finalValue) setVal(finalValue);
+        setTxType(type);
+        setTxCat(cat);
+
+        speakText(`Documento lido com sucesso. Valor identificado de ${finalValue ? formatBRL(parseFloat(finalValue)) : 'não identificado'}.`);
+        setActiveTab('novo');
+      };
+
+      // Cálculos gerais
       const filteredTransactions = useMemo(() => {
         if (viewFilter === 'meu') {
           return transactions.filter(t => t.author === userName);
@@ -192,15 +331,16 @@
         return { totalIncome: inc, totalExpense: exp, balance: inc - exp };
       }, [filteredTransactions]);
 
-      const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+      const totalInvested = useMemo(() => {
+        return investments.reduce((acc, curr) => acc + curr.amount, 0);
+      }, [investments]);
 
-      // Função de Adicionar - ZERA O FORMULÁRIO E RETORNA AO RESUMO SEM TRAVAR
+      // Adicionar Transação
       const handleAdd = (e) => {
         e.preventDefault();
         const parsed = parseFloat(val.replace(',', '.'));
         if (!desc.trim() || isNaN(parsed) || parsed <= 0) {
-          alert('Por favor, digite uma descrição e um valor válido.');
-          speakText('Preencha a descrição e um valor válido.');
+          alert('Preencha a descrição e um valor válido.');
           return;
         }
 
@@ -215,41 +355,58 @@
           isFamily: isFamilyScope
         };
 
-        const updatedList = [newTx, ...transactions];
-        setTransactions(updatedList);
-        syncWithCloud(familyCode, updatedList);
+        const updated = [newTx, ...transactions];
+        setTransactions(updated);
+        syncWithCloud(familyCode, updated);
 
-        // Zera os campos com segurança imediata
         setDesc('');
         setVal('');
         setActiveTab('resumo');
-        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} guardada.`);
+        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} salva com sucesso.`);
+      };
+
+      // Adicionar Investimento
+      const handleAddInvestment = (e) => {
+        e.preventDefault();
+        const parsed = parseFloat(invAmount.replace(',', '.'));
+        if (!invName.trim() || isNaN(parsed) || parsed <= 0) {
+          alert('Preencha o nome do investimento e o valor aplicado.');
+          return;
+        }
+
+        const newInv = {
+          id: Date.now().toString(),
+          name: invName.trim(),
+          amount: parsed,
+          type: invType,
+          yieldRate: invYield || '100% CDI'
+        };
+
+        setInvestments([...investments, newInv]);
+        setInvName('');
+        setInvAmount('');
+        speakText(`Investimento de ${formatBRL(parsed)} adicionado.`);
       };
 
       const handleDelete = (id, description) => {
-        const updatedList = transactions.filter(t => t.id !== id);
-        setTransactions(updatedList);
-        syncWithCloud(familyCode, updatedList);
+        const updated = transactions.filter(t => t.id !== id);
+        setTransactions(updated);
+        syncWithCloud(familyCode, updated);
         speakText(`${description} excluído.`);
-      };
-
-      const handleHearSummary = () => {
-        speakText(`Resumo financeiro. O saldo atual é de ${formatBRL(balance)}. Total de entradas: ${formatBRL(totalIncome)}. Total de saídas: ${formatBRL(totalExpense)}.`);
       };
 
       const zoomClasses = {
         normal: { container: 'text-sm sm:text-base', cardValue: 'text-2xl sm:text-3xl', button: 'py-2.5 px-3 text-sm' },
-        large: { container: 'text-base sm:text-lg', cardValue: 'text-3xl sm:text-4xl', button: 'py-3.5 px-4 text-base font-bold' },
+        large: { container: 'text-base sm:text-lg', cardValue: 'text-3xl sm:text-4xl', button: 'py-3 px-4 text-base font-bold' },
         extra: { container: 'text-lg sm:text-xl', cardValue: 'text-4xl sm:text-5xl', button: 'py-4 px-5 text-lg font-black' }
       }[zoomLevel];
 
       return (
         <div className={`min-h-screen bg-slate-100 text-slate-900 pb-28 ${zoomClasses.container} overflow-x-hidden w-full`}>
           
-          {/* TOPO COM ALTO-FALANTE E STATUS DE NUVEM */}
+          {/* TOPO RESPONSIVO */}
           <header className="bg-white border-b-2 border-slate-200 sticky top-0 z-40 px-3 py-2.5 shadow-sm w-full">
             <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
-              
               <div className="flex items-center gap-2 min-w-0">
                 <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0">
                   <Icons.Wallet />
@@ -263,116 +420,165 @@
                     <span className="text-[11px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-md">
                       {familyCode}
                     </span>
-                    <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-0.5">
-                      <Icons.Cloud /> {syncStatus}
-                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Botões de Acessibilidade (Zoom + Som) */}
+              {/* Botões de Acessibilidade */}
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-300 shrink-0">
-                <button 
-                  onClick={() => setZoomLevel('normal')} 
-                  className={`w-7 h-7 flex items-center justify-center rounded-xl text-xs font-bold transition-transform active:scale-90 ${zoomLevel === 'normal' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}
-                >
-                  A
-                </button>
-                <button 
-                  onClick={() => setZoomLevel('large')} 
-                  className={`w-8 h-7 flex items-center justify-center rounded-xl text-sm font-bold transition-transform active:scale-90 ${zoomLevel === 'large' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}
-                >
-                  A+
-                </button>
-                <button 
-                  onClick={() => setZoomLevel('extra')} 
-                  className={`w-9 h-7 flex items-center justify-center rounded-xl text-base font-black transition-transform active:scale-90 ${zoomLevel === 'extra' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}
-                >
-                  A++
-                </button>
-
-                {/* SINO / ALTO-FALANTE RECOLOCADO */}
-                <button 
-                  onClick={() => {
-                    const next = !audioEnabled;
-                    setAudioEnabled(next);
-                    if (next) speakText('Voz ligada');
-                  }} 
-                  className={`p-1.5 rounded-xl ml-0.5 transition-transform active:scale-90 ${audioEnabled ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-400'}`}
-                  title={audioEnabled ? "Desativar voz" : "Ativar voz"}
-                >
+                <button onClick={() => setZoomLevel('normal')} className={`w-7 h-7 flex items-center justify-center rounded-xl text-xs font-bold ${zoomLevel === 'normal' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}>A</button>
+                <button onClick={() => setZoomLevel('large')} className={`w-8 h-7 flex items-center justify-center rounded-xl text-sm font-bold ${zoomLevel === 'large' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}>A+</button>
+                <button onClick={() => setZoomLevel('extra')} className={`w-9 h-7 flex items-center justify-center rounded-xl text-base font-black ${zoomLevel === 'extra' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}>A++</button>
+                <button onClick={() => setAudioEnabled(!audioEnabled)} className={`p-1.5 rounded-xl ml-0.5 ${audioEnabled ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-400'}`}>
                   {audioEnabled ? <Icons.Volume2 /> : <Icons.VolumeX />}
                 </button>
               </div>
-
             </div>
           </header>
 
           <main className="max-w-xl mx-auto p-3.5 space-y-4 w-full">
             
-            {/* Alternador Família vs Apenas Minhas */}
-            <div className="flex bg-white p-1 rounded-2xl border-2 border-slate-300 shadow-sm gap-1 w-full">
-              <button
-                onClick={() => { setViewFilter('tudo'); speakText('Visualizando contas da família'); }}
-                className={`flex-1 py-2.5 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 ${viewFilter === 'tudo' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600'}`}
+            {/* BOTÕES DE ENTRADA RÁPIDA: VOZ E LEITURA DE PDF/FOTO */}
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={handleVoiceInput}
+                className={`py-3 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 shadow-sm transition-all active:scale-95 ${isListening ? 'bg-rose-600 text-white border-rose-700 animate-pulse' : 'bg-emerald-600 text-white border-emerald-700'}`}
               >
-                <Icons.Users /> Contas da Família
+                <Icons.Mic />
+                <span className="text-xs sm:text-sm">{isListening ? 'Ouvindo...' : 'Falar Conta'}</span>
               </button>
-              <button
-                onClick={() => { setViewFilter('meu'); speakText(`Visualizando apenas contas de ${userName}`); }}
-                className={`flex-1 py-2.5 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 ${viewFilter === 'meu' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600'}`}
-              >
-                <Icons.User /> Apenas Minhas ({userName})
-              </button>
+
+              <label className="py-3 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 border-indigo-700 bg-indigo-600 text-white shadow-sm cursor-pointer transition-all active:scale-95">
+                <Icons.Camera />
+                <span className="text-xs sm:text-sm">Ler Foto/PDF</span>
+                <input 
+                  type="file" 
+                  accept="application/pdf,image/*" 
+                  capture="environment"
+                  onChange={handleFileScan} 
+                  className="hidden" 
+                />
+              </label>
             </div>
+
+            {isProcessingDoc && (
+              <div className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-2xl text-center text-xs sm:text-sm font-bold text-indigo-900 animate-pulse">
+                {docStatus}
+              </div>
+            )}
 
             {/* ABA: RESUMO */}
             {activeTab === 'resumo' && (
               <div className="space-y-4">
                 
-                {/* Saldo Principal */}
+                {/* Cartão de Saldo Disponível */}
                 <div className={`p-5 rounded-3xl border-2 shadow-sm ${balance >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-rose-50 border-rose-300'}`}>
                   <div className="flex justify-between items-center text-slate-600 font-bold text-xs sm:text-sm">
-                    <span>Saldo Disponível ({viewFilter === 'tudo' ? 'Família' : userName}):</span>
+                    <span>Saldo Disponível em Conta:</span>
                   </div>
                   <div className={`mt-2 font-black tracking-tight ${zoomClasses.cardValue} ${balance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                     {formatBRL(balance)}
                   </div>
                 </div>
 
-                {/* Cards Entradas e Saídas */}
+                {/* Patrimônio Investido */}
+                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-amber-900 block">Patrimônio Investido / Poupança</span>
+                    <span className="font-extrabold text-amber-800 text-xl">{formatBRL(totalInvested)}</span>
+                  </div>
+                  <button onClick={() => setActiveTab('investimentos')} className="px-3 py-1.5 bg-amber-700 text-white rounded-xl text-xs font-bold">
+                    Ver Aplicações
+                  </button>
+                </div>
+
+                {/* Entradas e Saídas */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white p-3.5 rounded-2xl border-2 border-emerald-200 shadow-xs">
-                    <span className="text-[11px] sm:text-xs font-bold text-slate-500 block">Total Entradas</span>
+                    <span className="text-xs font-bold text-slate-500 block">Total Entradas</span>
                     <span className="font-extrabold text-emerald-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalIncome)}</span>
                   </div>
                   <div className="bg-white p-3.5 rounded-2xl border-2 border-rose-200 shadow-xs">
-                    <span className="text-[11px] sm:text-xs font-bold text-slate-500 block">Total Saídas</span>
+                    <span className="text-xs font-bold text-slate-500 block">Total Saídas</span>
                     <span className="font-extrabold text-rose-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalExpense)}</span>
                   </div>
                 </div>
 
-                {/* Botão de Falar Resumo */}
-                <button 
-                  onClick={handleHearSummary} 
-                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2.5 font-bold transition-transform active:scale-95"
-                >
-                  <Icons.Volume2 />
-                  <span>Ouvir Resumo em Voz Alta</span>
-                </button>
-
-                {/* Botão para Nova Conta */}
                 <button 
                   onClick={() => setActiveTab('novo')} 
                   className={`w-full bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2.5 shadow-md hover:bg-slate-800 transition-transform active:scale-95 ${zoomClasses.button}`}
                 >
                   <Icons.PlusCircle />
-                  <span>Anotar Nova Conta / Dinheiro</span>
+                  <span>Anotar Nova Conta Manualmente</span>
                 </button>
               </div>
             )}
 
-            {/* ABA: NOVO LANÇAMENTO (CORRIGIDO PARA LIMPAR O FORMULÁRIO SEM TRAVAR) */}
+            {/* ABA: INVESTIMENTOS & RENDIMENTOS */}
+            {activeTab === 'investimentos' && (
+              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="font-black text-slate-900 text-xl">Carteira de Investimentos</h2>
+                  <span className="p-2 bg-amber-100 text-amber-800 rounded-xl"><Icons.Piggy /></span>
+                </div>
+
+                <div className="p-4 bg-linear-to-r from-amber-500 to-amber-700 text-white rounded-2xl shadow-sm">
+                  <span className="text-xs font-bold uppercase tracking-wider block opacity-90">Total Acumulado</span>
+                  <span className="text-3xl font-black mt-1 block">{formatBRL(totalInvested)}</span>
+                  <span className="text-xs mt-1 block opacity-95">Rendimento médio estimado: ~ R$ {(totalInvested * 0.0085).toFixed(2)} / mês</span>
+                </div>
+
+                {/* Formulário de Novo Investimento */}
+                <form onSubmit={handleAddInvestment} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <h3 className="font-bold text-sm text-slate-800">Adicionar Aplicação</h3>
+                  <input 
+                    type="text" 
+                    placeholder="Nome (Ex: CDB C6, Tesouro Selic, Poupança)" 
+                    value={invName} 
+                    onChange={(e) => setInvName(e.target.value)} 
+                    className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input 
+                      type="number" 
+                      placeholder="Valor Aplicado (R$)" 
+                      value={invAmount} 
+                      onChange={(e) => setInvAmount(e.target.value)} 
+                      className="p-2.5 border border-slate-300 rounded-xl text-sm font-bold"
+                    />
+                    <select 
+                      value={invType} 
+                      onChange={(e) => setInvType(e.target.value)} 
+                      className="p-2.5 border border-slate-300 rounded-xl text-sm font-semibold"
+                    >
+                      <option value="Renda Fixa">Renda Fixa</option>
+                      <option value="CDB">CDB</option>
+                      <option value="Tesouro Direto">Tesouro Direto</option>
+                      <option value="Poupança">Poupança</option>
+                      <option value="Ações / FIIs">Ações / Fundos</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="w-full bg-amber-700 text-white py-2.5 rounded-xl font-bold text-sm">
+                    Salvar Investimento
+                  </button>
+                </form>
+
+                {/* Lista de Investimentos */}
+                <div className="space-y-2">
+                  {investments.map(inv => (
+                    <div key={inv.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{inv.name}</p>
+                        <span className="text-xs text-slate-500 font-semibold">{inv.type} • {inv.yieldRate}</span>
+                      </div>
+                      <span className="font-black text-amber-800">{formatBRL(inv.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ABA: NOVO LANÇAMENTO */}
             {activeTab === 'novo' && (
               <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
                 <h2 className="font-black text-slate-900 text-xl sm:text-2xl">Anotar Movimento</h2>
@@ -380,15 +586,15 @@
                 <div className="grid grid-cols-2 gap-2.5">
                   <button 
                     type="button" 
-                    onClick={() => { setTxType('income'); speakText('Entrada'); }} 
-                    className={`py-3 rounded-2xl font-black border-2 flex items-center justify-center gap-1.5 transition-transform active:scale-95 ${txType === 'income' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-700'}`}
+                    onClick={() => setTxType('income')} 
+                    className={`py-3 rounded-2xl font-black border-2 ${txType === 'income' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100'}`}
                   >
                     + Entrada
                   </button>
                   <button 
                     type="button" 
-                    onClick={() => { setTxType('expense'); speakText('Saída'); }} 
-                    className={`py-3 rounded-2xl font-black border-2 flex items-center justify-center gap-1.5 transition-transform active:scale-95 ${txType === 'expense' ? 'bg-rose-600 text-white border-rose-700' : 'bg-slate-100 text-slate-700'}`}
+                    onClick={() => setTxType('expense')} 
+                    className={`py-3 rounded-2xl font-black border-2 ${txType === 'expense' ? 'bg-rose-600 text-white border-rose-700' : 'bg-slate-100'}`}
                   >
                     - Saída (Gasto)
                   </button>
@@ -396,7 +602,7 @@
 
                 <form onSubmit={handleAdd} className="space-y-4">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1 text-sm">O que é?</label>
+                    <label className="block font-bold text-slate-700 mb-1 text-sm">Descrição</label>
                     <input 
                       type="text" 
                       placeholder="Ex: Farmácia, Mercado, Salário..." 
@@ -420,21 +626,6 @@
                     />
                   </div>
 
-                  <div className="p-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl flex items-center justify-between gap-2">
-                    <div>
-                      <span className="font-extrabold text-slate-900 block text-sm sm:text-base">Sincronizar com a Família?</span>
-                      <span className="text-[11px] sm:text-xs text-slate-500 font-bold block">
-                        {isFamilyScope ? 'Todos da família vão ver esta conta' : 'Apenas você verá este lançamento'}
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={isFamilyScope}
-                      onChange={(e) => setIsFamilyScope(e.target.checked)}
-                      className="w-7 h-7 accent-emerald-600 rounded-lg cursor-pointer shrink-0"
-                    />
-                  </div>
-
                   <div>
                     <label className="block font-bold text-slate-700 mb-2 text-sm">Categoria:</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -442,8 +633,8 @@
                         <button 
                           key={cat.id} 
                           type="button" 
-                          onClick={() => { setTxCat(cat.id); speakText(cat.label); }} 
-                          className={`p-2.5 rounded-xl border-2 text-left text-xs font-bold transition-all active:scale-95 ${txCat === cat.id ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
+                          onClick={() => setTxCat(cat.id)} 
+                          className={`p-2.5 rounded-xl border-2 text-left text-xs font-bold ${txCat === cat.id ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
                         >
                           {cat.label}
                         </button>
@@ -452,17 +643,10 @@
                   </div>
 
                   <div className="pt-2 flex gap-2.5">
-                    <button 
-                      type="submit" 
-                      className={`flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-md transition-transform active:scale-95 ${zoomClasses.button}`}
-                    >
-                      Salvar
+                    <button type="submit" className={`flex-1 bg-emerald-600 text-white rounded-2xl shadow-md ${zoomClasses.button}`}>
+                      Salvar Conta
                     </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setActiveTab('resumo')} 
-                      className="px-5 py-3 bg-slate-200 text-slate-700 rounded-2xl font-bold transition-transform active:scale-95"
-                    >
+                    <button type="button" onClick={() => setActiveTab('resumo')} className="px-5 py-3 bg-slate-200 rounded-2xl font-bold">
                       Voltar
                     </button>
                   </div>
@@ -473,38 +657,24 @@
             {/* ABA: HISTÓRICO */}
             {activeTab === 'historico' && (
               <div className="bg-white p-4 sm:p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-3">
-                <h2 className="font-black text-slate-900 text-xl sm:text-2xl">Lançamentos</h2>
+                <h2 className="font-black text-slate-900 text-xl">Todas as Contas</h2>
                 <div className="divide-y-2 divide-slate-100">
                   {filteredTransactions.map((tx) => (
                     <div key={tx.id} className="py-3 flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-extrabold text-slate-900 text-sm sm:text-base truncate">{tx.description}</p>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${tx.isFamily ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {tx.isFamily ? 'Família' : 'Pessoal'}
-                          </span>
-                        </div>
-                        <span className="text-[11px] font-bold text-slate-500 block">
-                          {tx.date} • Por: {tx.author || 'Eu'}
-                        </span>
+                        <p className="font-extrabold text-slate-900 text-sm truncate">{tx.description}</p>
+                        <span className="text-[11px] font-bold text-slate-500 block">{tx.date} • {tx.author}</span>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`font-black text-base sm:text-lg ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-black text-base ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {tx.type === 'income' ? '+' : '-'} {formatBRL(tx.amount)}
                         </span>
-                        <button 
-                          onClick={() => handleDelete(tx.id, tx.description)} 
-                          className="p-2 text-slate-400 hover:text-rose-600 transition-transform active:scale-90"
-                          title="Excluir"
-                        >
+                        <button onClick={() => handleDelete(tx.id, tx.description)} className="p-2 text-slate-400 hover:text-rose-600">
                           <Icons.Trash2 />
                         </button>
                       </div>
                     </div>
                   ))}
-                  {filteredTransactions.length === 0 && (
-                    <p className="text-center py-6 text-slate-400 text-sm font-semibold">Nenhuma conta cadastrada ainda.</p>
-                  )}
                 </div>
               </div>
             )}
@@ -512,115 +682,38 @@
             {/* ABA: FAMÍLIA & CONEXÃO */}
             {activeTab === 'familia' && (
               <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-5">
-                <div>
-                  <h2 className="font-black text-slate-900 text-xl sm:text-2xl">Perfis & Código da Família</h2>
-                  <p className="text-slate-600 text-xs sm:text-sm mt-1">
-                    Basta colocar o mesmo código nos dois celulares para sincronizarem pela internet!
-                  </p>
-                </div>
-
-                {/* Perfil Pessoal */}
-                <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl space-y-2.5">
-                  <h3 className="font-bold text-slate-900 text-base sm:text-lg flex items-center gap-2">
-                    <Icons.User /> Meu Nome no Aparelho:
-                  </h3>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={userName}
-                      onChange={(e) => setUserName(e.target.value)}
-                      placeholder="Ex: Fernanda, João..."
-                      className="w-full p-3 border-2 border-slate-300 rounded-xl font-bold text-base outline-none focus:border-emerald-600"
-                    />
-                    <button
-                      onClick={() => { 
-                        alert('Nome salvo!'); 
-                        speakText(`Nome alterado para ${userName}`); 
-                      }}
-                      className="w-full sm:w-auto px-5 py-3 bg-slate-900 text-white font-bold rounded-xl transition-transform active:scale-95 shrink-0"
-                    >
-                      Guardar
-                    </button>
-                  </div>
-                </div>
-
-                {/* Código de Família */}
-                <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-2.5">
-                  <h3 className="font-bold text-emerald-950 text-base sm:text-lg flex items-center gap-2">
-                    <Icons.Key /> 1. Código da Sua Família
-                  </h3>
-                  <p className="text-xs text-slate-700">
-                    Digite este mesmo código no outro celular para verem as mesmas contas:
-                  </p>
-                  <div className="p-3 bg-white border-2 border-emerald-400 rounded-xl flex items-center justify-between">
-                    <span className="text-xl font-black text-emerald-800 tracking-wider">{familyCode}</span>
-                    <button 
-                      onClick={generateNewFamilyCode} 
-                      className="text-xs text-emerald-700 font-bold underline p-1 active:scale-90"
-                    >
-                      Gerar Outro
-                    </button>
-                  </div>
-                </div>
-
-                {/* Conectar a Outro Aparelho */}
-                <div className="p-4 bg-blue-50 border-2 border-blue-300 rounded-2xl space-y-2.5">
-                  <h3 className="font-bold text-blue-950 text-base sm:text-lg flex items-center gap-2">
-                    <Icons.Users /> 2. Conectar a Outro Celular
-                  </h3>
-                  <p className="text-xs text-slate-700">
-                    Se o outro celular já possui um código, digite-o aqui para se juntarem:
-                  </p>
-                  <form onSubmit={handleConnectFamily} className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      placeholder="Ex: FAM-7481"
-                      value={inputCode}
-                      onChange={(e) => setInputCode(e.target.value)}
-                      className="w-full p-3 border-2 border-blue-300 rounded-xl font-mono font-bold uppercase text-base outline-none"
-                    />
-                    <button 
-                      type="submit" 
-                      className="w-full sm:w-auto px-6 py-3 bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-transform active:scale-95 shrink-0"
-                    >
-                      Conectar
-                    </button>
-                  </form>
+                <h2 className="font-black text-slate-900 text-xl">Sincronização Família</h2>
+                <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-2">
+                  <span className="text-xs text-slate-700 font-bold block">Código da Família:</span>
+                  <span className="text-2xl font-black text-emerald-800 tracking-wider block">{familyCode}</span>
+                  <p className="text-xs text-slate-600">Coloque este mesmo código no outro celular para sincronizarem juntos.</p>
                 </div>
               </div>
             )}
           </main>
 
-          {/* BARRA INFERIOR RESPONSIVA */}
+          {/* BARRA DE NAVEGAÇÃO INFERIOR */}
           <nav className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-slate-300 p-1.5 z-40 shadow-lg">
-            <div className="max-w-xl mx-auto grid grid-cols-4 gap-1">
-              <button 
-                onClick={() => { setActiveTab('resumo'); speakText('Resumo'); }} 
-                className={`flex flex-col items-center py-2 rounded-2xl transition-all active:scale-90 ${activeTab === 'resumo' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}
-              >
+            <div className="max-w-xl mx-auto grid grid-cols-5 gap-1">
+              <button onClick={() => setActiveTab('resumo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'resumo' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
                 <Icons.Wallet />
-                <span className="text-[11px] sm:text-xs mt-0.5">Resumo</span>
+                <span className="text-[10px] mt-0.5">Resumo</span>
               </button>
-              <button 
-                onClick={() => { setActiveTab('novo'); speakText('Anotar'); }} 
-                className={`flex flex-col items-center py-2 rounded-2xl transition-all active:scale-90 ${activeTab === 'novo' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}
-              >
+              <button onClick={() => setActiveTab('novo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'novo' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
                 <Icons.PlusCircle />
-                <span className="text-[11px] sm:text-xs mt-0.5">+ Anotar</span>
+                <span className="text-[10px] mt-0.5">+ Anotar</span>
               </button>
-              <button 
-                onClick={() => { setActiveTab('historico'); speakText('Contas'); }} 
-                className={`flex flex-col items-center py-2 rounded-2xl transition-all active:scale-90 ${activeTab === 'historico' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}
-              >
+              <button onClick={() => setActiveTab('investimentos')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'investimentos' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Piggy />
+                <span className="text-[10px] mt-0.5">Investir</span>
+              </button>
+              <button onClick={() => setActiveTab('historico')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'historico' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
                 <Icons.Calendar />
-                <span className="text-[11px] sm:text-xs mt-0.5">Contas</span>
+                <span className="text-[10px] mt-0.5">Contas</span>
               </button>
-              <button 
-                onClick={() => { setActiveTab('familia'); speakText('Família'); }} 
-                className={`flex flex-col items-center py-2 rounded-2xl transition-all active:scale-90 ${activeTab === 'familia' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}
-              >
+              <button onClick={() => setActiveTab('familia')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'familia' ? 'bg-emerald-100 text-emerald-900 font-extrabold' : 'text-slate-600'}`}>
                 <Icons.Users />
-                <span className="text-[11px] sm:text-xs mt-0.5">Família</span>
+                <span className="text-[10px] mt-0.5">Família</span>
               </button>
             </div>
           </nav>
