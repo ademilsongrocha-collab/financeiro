@@ -510,4 +510,507 @@
 
       const zoomClasses = {
         normal: { container: 'text-sm sm:text-base', cardValue: 'text-2xl sm:text-3xl', button: 'py-2.5 px-3 text-sm' },
-        large: { container: 'text-base sm:text-lg', cardValue: '
+        large: { container: 'text-base sm:text-lg', cardValue: 'text-3xl sm:text-4xl', button: 'py-3.5 px-4 text-base font-bold' },
+        extra: { container: 'text-lg sm:text-xl', cardValue: 'text-4xl sm:text-5xl', button: 'py-4 px-5 text-lg font-black' }
+      }[zoomLevel];
+
+      return (
+        <div className={`min-h-screen bg-slate-100 text-slate-900 pb-28 ${zoomClasses.container} overflow-x-hidden w-full`}>
+          
+          {/* CABEÇALHO */}
+          <header className="bg-white border-b-2 border-slate-200 sticky top-0 z-40 px-3 py-2.5 shadow-sm w-full">
+            <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`p-2 text-white rounded-xl shrink-0 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
+                  {currentMode === 'pessoal' ? <Icons.User /> : <Icons.Users />}
+                </div>
+                <div className="min-w-0">
+                  <h1 className="font-extrabold text-slate-900 text-base sm:text-lg leading-tight truncate">
+                    {currentMode === 'pessoal' ? `Contas de ${userName}` : 'Contas da Família'}
+                  </h1>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[11px] font-black text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-md truncate">
+                      Cód: {familyCode}
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${isOwner ? 'bg-purple-100 text-purple-800' : (deviceStatus === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}`}>
+                      {isOwner ? 'Titular' : (deviceStatus === 'APPROVED' ? 'Membro' : 'Pendente')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões de Acessibilidade */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-300 shrink-0">
+                <button onClick={() => setZoomLevel('normal')} className={`w-7 h-7 flex items-center justify-center rounded-xl text-xs font-bold ${zoomLevel === 'normal' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A</button>
+                <button onClick={() => setZoomLevel('large')} className={`w-8 h-7 flex items-center justify-center rounded-xl text-sm font-bold ${zoomLevel === 'large' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A+</button>
+                <button onClick={() => setZoomLevel('extra')} className={`w-9 h-7 flex items-center justify-center rounded-xl text-base font-black ${zoomLevel === 'extra' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A++</button>
+                <button onClick={() => setAudioEnabled(!audioEnabled)} className={`p-1.5 rounded-xl ml-0.5 ${audioEnabled ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-400'}`}>
+                  {audioEnabled ? <Icons.Volume2 /> : <Icons.VolumeX />}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-xl mx-auto p-3.5 space-y-4 w-full">
+            
+            {/* AVISO DE DISPOSITIVO PENDENTE DE APROVAÇÃO PELO TITULAR */}
+            {!isOwner && deviceStatus === 'PENDING' && currentMode === 'familia' && (
+              <div className="bg-amber-50 border-2 border-amber-400 p-4 rounded-3xl text-center space-y-2 shadow-sm">
+                <div className="flex justify-center text-amber-600"><Icons.Lock /></div>
+                <h3 className="font-black text-amber-900 text-base">Aguardando Aprovação do Titular</h3>
+                <p className="text-xs text-amber-800">
+                  Este aparelho solicitou entrada na família <strong>{familyCode}</strong>. Peça para o titular aprovar a entrada no painel de segurança dele.
+                </p>
+                <button 
+                  onClick={() => pullFromCloud(familyCode, true)}
+                  className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-xl active:scale-95 shadow-xs"
+                >
+                  Verificar se já fui aprovado
+                </button>
+              </div>
+            )}
+
+            {/* PAINEL DE SEGURANÇA EXCLUSIVO DO TITULAR: APROVAÇÕES PENDENTES */}
+            {isOwner && pendingRequests.length > 0 && (
+              <div className="bg-purple-50 border-2 border-purple-400 p-4 rounded-3xl space-y-3 shadow-md">
+                <div className="flex items-center gap-2 text-purple-900">
+                  <Icons.ShieldCheck />
+                  <h3 className="font-black text-sm">Dispositivos Pedindo Entrada na Família ({pendingRequests.length})</h3>
+                </div>
+                <div className="space-y-2">
+                  {pendingRequests.map(req => (
+                    <div key={req.id} className="bg-white p-3 rounded-2xl border border-purple-200 flex items-center justify-between gap-2 shadow-xs">
+                      <div>
+                        <p className="font-extrabold text-slate-900 text-sm">{req.name}</p>
+                        <span className="text-[10px] text-slate-500 font-semibold block">Horário: {req.date}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => handleApproveDevice(req)}
+                          className="px-3 py-1.5 bg-emerald-600 text-white font-bold rounded-xl text-xs active:scale-95 shadow-xs"
+                        >
+                          Aprovar
+                        </button>
+                        <button
+                          onClick={() => handleRejectDevice(req)}
+                          className="px-3 py-1.5 bg-rose-200 text-rose-800 font-bold rounded-xl text-xs active:scale-95"
+                        >
+                          Recusar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SELETOR DE MODO PESSOAL vs FAMÍLIA */}
+            <div className="bg-white p-1.5 rounded-2xl border-2 border-slate-300 shadow-sm grid grid-cols-2 gap-1.5 w-full">
+              <button
+                type="button"
+                onClick={() => handleToggleMode('pessoal')}
+                className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                <Icons.User /> Minhas Contas ({userName})
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleMode('familia')}
+                className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'familia' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                <Icons.Users /> Contas da Família
+              </button>
+            </div>
+
+            {/* BOTÕES DE FALA E LEITURA */}
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={handleVoiceInput}
+                className={`py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 shadow-sm transition-all active:scale-95 ${isListening ? 'bg-rose-600 text-white border-rose-700 animate-pulse' : 'bg-slate-900 text-white border-slate-900'}`}
+              >
+                <Icons.Mic />
+                <span className="text-xs sm:text-sm">{isListening ? 'Ouvindo...' : 'Falar Lançamento'}</span>
+              </button>
+
+              <label className="py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 border-indigo-700 bg-indigo-600 text-white shadow-sm cursor-pointer transition-all active:scale-95">
+                <Icons.Camera />
+                <span className="text-xs sm:text-sm">Ler Foto/PDF</span>
+                <input 
+                  type="file" 
+                  accept="application/pdf,image/*" 
+                  capture="environment"
+                  onChange={handleFileScan} 
+                  className="hidden" 
+                />
+              </label>
+            </div>
+
+            {isProcessingDoc && (
+              <div className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-2xl text-center text-xs sm:text-sm font-bold text-indigo-900 animate-pulse">
+                {docStatus}
+              </div>
+            )}
+
+            {/* ABA: RESUMO */}
+            {activeTab === 'resumo' && (
+              <div className="space-y-4">
+                <div className={`p-5 rounded-3xl border-2 shadow-sm ${currentMode === 'pessoal' ? (balance >= 0 ? 'bg-indigo-50 border-indigo-300' : 'bg-rose-50 border-rose-300') : (balance >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-rose-50 border-rose-300')}`}>
+                  <div className="flex justify-between items-center text-slate-600 font-bold text-xs sm:text-sm">
+                    <span>{currentMode === 'pessoal' ? `Saldo Pessoal (${userName}):` : `Saldo da Família (${familyCode}):`}</span>
+                    <span className="text-[10px] uppercase font-black bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                      {currentMode === 'pessoal' ? 'Individual' : 'Compartilhado'}
+                    </span>
+                  </div>
+                  <div className={`mt-2 font-black tracking-tight ${zoomClasses.cardValue} ${balance >= 0 ? (currentMode === 'pessoal' ? 'text-indigo-700' : 'text-emerald-700') : 'text-rose-700'}`}>
+                    {formatBRL(balance)}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-amber-900 block">Patrimônio Investido</span>
+                    <span className="font-extrabold text-amber-800 text-xl">{formatBRL(totalInvested)}</span>
+                  </div>
+                  <button onClick={() => setActiveTab('investimentos')} className="px-3 py-1.5 bg-amber-700 text-white rounded-xl text-xs font-bold">
+                    Ver Aplicações
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white p-3.5 rounded-2xl border-2 border-emerald-200 shadow-xs">
+                    <span className="text-xs font-bold text-slate-500 block">Entradas ({currentMode === 'pessoal' ? 'Minhas' : 'Família'})</span>
+                    <span className="font-extrabold text-emerald-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalIncome)}</span>
+                  </div>
+                  <div className="bg-white p-3.5 rounded-2xl border-2 border-rose-200 shadow-xs">
+                    <span className="text-xs font-bold text-slate-500 block">Saídas ({currentMode === 'pessoal' ? 'Minhas' : 'Família'})</span>
+                    <span className="font-extrabold text-rose-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalExpense)}</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => speakText(`Saldo atual: ${formatBRL(balance)}. Entradas: ${formatBRL(totalIncome)}. Saídas: ${formatBRL(totalExpense)}.`)}
+                  className={`w-full text-white p-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2.5 font-bold transition-transform active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}
+                >
+                  <Icons.Volume2 />
+                  <span>Ouvir Resumo do Modo Atual</span>
+                </button>
+
+                <button 
+                  onClick={() => setActiveTab('novo')} 
+                  className={`w-full bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2.5 shadow-md hover:bg-slate-800 transition-transform active:scale-95 ${zoomClasses.button}`}
+                >
+                  <Icons.PlusCircle />
+                  <span>Anotar Conta em: {currentMode === 'pessoal' ? 'Minhas Contas' : 'Família'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* ABA: INVESTIMENTOS */}
+            {activeTab === 'investimentos' && (
+              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="font-black text-slate-900 text-xl">Carteira de Investimentos</h2>
+                  <span className="p-2 bg-amber-100 text-amber-800 rounded-xl"><Icons.Piggy /></span>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-amber-500 to-amber-700 text-white rounded-2xl shadow-sm">
+                  <span className="text-xs font-bold uppercase tracking-wider block opacity-90">Total Investido</span>
+                  <span className="text-3xl font-black mt-1 block">{formatBRL(totalInvested)}</span>
+                  <span className="text-xs mt-1 block opacity-95">Rendimento estimado: ~ R$ {(totalInvested * 0.0085).toFixed(2)} / mês</span>
+                </div>
+
+                <form onSubmit={handleAddInvestment} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <h3 className="font-bold text-sm text-slate-800">Adicionar Investimento</h3>
+                  <input 
+                    type="text" 
+                    placeholder="Nome (Ex: Tesouro Selic, CDB Inter)" 
+                    value={invName} 
+                    onChange={(e) => setInvName(e.target.value)} 
+                    className="w-full p-2.5 border border-slate-300 rounded-xl text-sm outline-none"
+                    required
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">R$</span>
+                      <input 
+                        type="text" 
+                        inputMode="numeric"
+                        placeholder="0,00" 
+                        value={invAmount} 
+                        onChange={(e) => setInvAmount(formatCurrencyMask(e.target.value))} 
+                        className="w-full pl-9 pr-2.5 py-2.5 border border-slate-300 rounded-xl text-sm font-bold outline-none"
+                        required
+                      />
+                    </div>
+                    <select 
+                      value={invType} 
+                      onChange={(e) => setInvType(e.target.value)} 
+                      className="p-2.5 border border-slate-300 rounded-xl text-sm font-semibold outline-none"
+                    >
+                      <option value="Renda Fixa">Renda Fixa</option>
+                      <option value="CDB">CDB</option>
+                      <option value="Tesouro Direto">Tesouro Direto</option>
+                      <option value="Poupança">Poupança</option>
+                      <option value="Ações / FIIs">Ações / Fundos</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="w-full bg-amber-700 text-white py-2.5 rounded-xl font-bold text-sm">
+                    Salvar Aplicação
+                  </button>
+                </form>
+
+                <div className="space-y-2">
+                  {investments.map(inv => (
+                    <div key={inv.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{inv.name}</p>
+                        <span className="text-xs text-slate-500 font-semibold">{inv.type} • {inv.yieldRate}</span>
+                      </div>
+                      <span className="font-black text-amber-800">{formatBRL(inv.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ABA: NOVO LANÇAMENTO */}
+            {activeTab === 'novo' && (
+              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="font-black text-slate-900 text-xl sm:text-2xl">Anotar Movimento</h2>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${currentMode === 'pessoal' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                    Modo: {currentMode === 'pessoal' ? 'Pessoal' : 'Família'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button 
+                    type="button" 
+                    onClick={() => setTxType('income')} 
+                    className={`py-3 rounded-2xl font-black border-2 ${txType === 'income' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100'}`}
+                  >
+                    + Entrada
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setTxType('expense')} 
+                    className={`py-3 rounded-2xl font-black border-2 ${txType === 'expense' ? 'bg-rose-600 text-white border-rose-700' : 'bg-slate-100'}`}
+                  >
+                    - Saída (Gasto)
+                  </button>
+                </div>
+
+                <form onSubmit={handleAdd} className="space-y-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-sm">O que é?</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Mercado, Salário, Farmácia..." 
+                      value={desc} 
+                      onChange={(e) => setDesc(e.target.value)} 
+                      className="w-full p-3.5 border-2 border-slate-300 rounded-2xl text-base font-medium outline-none focus:border-emerald-600" 
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-sm">Valor (R$)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-3.5 text-xl font-black text-slate-400">R$</span>
+                      <input 
+                        type="text" 
+                        inputMode="numeric"
+                        placeholder="0,00" 
+                        value={val} 
+                        onChange={(e) => setVal(formatCurrencyMask(e.target.value))} 
+                        className="w-full pl-14 pr-3.5 py-3.5 border-2 border-slate-300 rounded-2xl text-2xl font-black text-slate-900 outline-none focus:border-emerald-600" 
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-2 text-sm">Categoria:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {CATEGORIES[txType].map((cat) => (
+                        <button 
+                          key={cat.id} 
+                          type="button" 
+                          onClick={() => setTxCat(cat.id)} 
+                          className={`p-2.5 rounded-xl border-2 text-left text-xs font-bold ${txCat === cat.id ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex gap-2.5">
+                    <button type="submit" className={`flex-1 bg-slate-900 text-white rounded-2xl shadow-md ${zoomClasses.button}`}>
+                      Salvar em {currentMode === 'pessoal' ? 'Minhas Contas' : 'Família'}
+                    </button>
+                    <button type="button" onClick={() => setActiveTab('resumo')} className="px-5 py-3 bg-slate-200 rounded-2xl font-bold">
+                      Voltar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* ABA: HISTÓRICO */}
+            {activeTab === 'historico' && (
+              <div className="bg-white p-4 sm:p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-3">
+                <div className="flex justify-between items-center">
+                  <h2 className="font-black text-slate-900 text-xl">Lançamentos</h2>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${currentMode === 'pessoal' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                    Modo: {currentMode === 'pessoal' ? 'Pessoal' : 'Família'}
+                  </span>
+                </div>
+
+                <div className="divide-y-2 divide-slate-100">
+                  {currentTransactions.map((tx) => (
+                    <div key={tx.id} className="py-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-extrabold text-slate-900 text-sm truncate">{tx.description}</p>
+                        <span className="text-[11px] font-bold text-slate-500 block">
+                          {tx.date} {tx.author ? `• Por: ${tx.author}` : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-black text-base ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {tx.type === 'income' ? '+' : '-'} {formatBRL(tx.amount)}
+                        </span>
+                        <button onClick={() => handleDelete(tx.id, tx.description)} className="p-2 text-slate-400 hover:text-rose-600">
+                          <Icons.Trash2 />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {currentTransactions.length === 0 && (
+                    <p className="text-center py-6 text-slate-400 text-sm font-semibold">Nenhuma conta cadastrada neste modo.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ABA: CONFIGURAÇÃO DE FAMÍLIA COM GESTÃO DE SEGURANÇA E INCLUSÃO */}
+            {activeTab === 'familia' && (
+              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-5">
+                <div>
+                  <h2 className="font-black text-slate-900 text-xl">Gestão da Família & Segurança</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Altere seu nome ou conecte-se a outro grupo familiar.</p>
+                </div>
+
+                {/* Perfil do Usuário */}
+                <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl space-y-2">
+                  <label className="text-xs font-bold text-slate-700 block">Meu Nome de Usuário:</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={userName}
+                      onChange={(e) => setUserName(e.target.value)}
+                      className="flex-1 p-2.5 border-2 border-slate-300 rounded-xl font-bold text-sm outline-none focus:border-indigo-600"
+                    />
+                    <button 
+                      onClick={() => { alert('Nome salvo com sucesso!'); speakText(`Nome alterado para ${userName}`); }}
+                      className="px-4 bg-slate-900 text-white font-bold rounded-xl text-xs active:scale-95"
+                    >
+                      Salvar Nome
+                    </button>
+                  </div>
+                </div>
+
+                {/* FAMÍLIA CONECTADA ATUAL */}
+                <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">Código da Família Atual</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isOwner ? 'bg-purple-200 text-purple-900' : 'bg-green-200 text-green-900'}`}>
+                      {isOwner ? 'Você é o Titular' : 'Você é Membro'}
+                    </span>
+                  </div>
+                  <div className="text-3xl font-black text-emerald-800 tracking-wider py-1 font-mono">
+                    {familyCode}
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-tight">
+                    {isOwner 
+                      ? 'Como titular, passe este código para os outros celulares. Quando eles tentarem entrar, você aprovará no painel de segurança.' 
+                      : 'Você está conectado a esta família. Todas as contas lançadas sincronizam automaticamente.'}
+                  </p>
+                </div>
+
+                {/* BOTÃO E CAMPO PARA ENTRAR EM OUTRA FAMÍLIA */}
+                <div className="p-4 bg-blue-50 border-2 border-blue-300 rounded-2xl space-y-3">
+                  <h3 className="font-extrabold text-blue-950 text-sm flex items-center gap-1.5">
+                    <Icons.Lock /> Entrar em Outra Família com Código
+                  </h3>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder="Digite o código (Ex: FAM-1234)"
+                      value={editFamilyInput}
+                      onChange={(e) => setEditFamilyInput(e.target.value.toUpperCase())}
+                      className="flex-1 p-3 border-2 border-blue-300 bg-white rounded-xl font-mono font-bold text-base uppercase outline-none"
+                    />
+                    <button
+                      onClick={() => handleRequestJoinFamily(editFamilyInput)}
+                      className="px-5 py-3 bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm active:scale-95 shadow-sm"
+                    >
+                      Solicitar Entrada
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-blue-700 block">
+                    * Ao clicar em Solicitar Entrada, o aparelho do titular daquela família receberá um aviso para aprovar você.
+                  </span>
+                </div>
+
+                {/* CRIAR UMA NOVA FAMÍLIA DO ZERO */}
+                <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">Quer começar do zero?</h4>
+                    <span className="text-xs text-slate-500">Crie um novo código e torne-se o titular.</span>
+                  </div>
+                  <button
+                    onClick={handleCreateNewFamily}
+                    className="px-4 py-2.5 bg-slate-900 text-white font-bold rounded-xl text-xs active:scale-95 shadow-sm shrink-0"
+                  >
+                    Criar Nova Família
+                  </button>
+                </div>
+
+              </div>
+            )}
+          </main>
+
+          {/* BARRA INFERIOR */}
+          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-slate-300 p-1.5 z-40 shadow-lg">
+            <div className="max-w-xl mx-auto grid grid-cols-5 gap-1">
+              <button onClick={() => setActiveTab('resumo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'resumo' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Wallet />
+                <span className="text-[10px] mt-0.5">Resumo</span>
+              </button>
+              <button onClick={() => setActiveTab('novo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'novo' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
+                <Icons.PlusCircle />
+                <span className="text-[10px] mt-0.5">+ Anotar</span>
+              </button>
+              <button onClick={() => setActiveTab('investimentos')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'investimentos' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Piggy />
+                <span className="text-[10px] mt-0.5">Investir</span>
+              </button>
+              <button onClick={() => setActiveTab('historico')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'historico' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Calendar />
+                <span className="text-[10px] mt-0.5">Contas</span>
+              </button>
+              <button onClick={() => setActiveTab('familia')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'familia' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
+                <Icons.Users />
+                <span className="text-[10px] mt-0.5">Família</span>
+              </button>
+            </div>
+          </nav>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
