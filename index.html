@@ -24,8 +24,8 @@
 </head>
 <body class="bg-slate-100 text-slate-900">
   <div id="root">
-    <div style="padding: 20px; text-align: center; font-weight: bold; color: #475569;">
-      Carregando aplicativo...
+    <div style="padding: 24px; text-align: center; font-weight: bold; color: #475569;">
+      Carregando Sistema Financeiro...
     </div>
   </div>
 
@@ -53,7 +53,8 @@
       Camera: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
       Piggy: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
       Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
-      Edit: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+      ShieldCheck: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
+      Lock: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
     };
 
     const CATEGORIES = {
@@ -92,16 +93,31 @@
       return parseFloat(onlyDigits) / 100;
     }
 
+    function getDeviceId() {
+      let id = localStorage.getItem('device_fingerprint_id');
+      if (!id) {
+        id = 'DEV_' + Math.random().toString(36).substring(2, 9).toUpperCase();
+        localStorage.setItem('device_fingerprint_id', id);
+      }
+      return id;
+    }
+
     function App() {
-      const [userName, setUserName] = useState(() => {
-        try { return localStorage.getItem('usuario_nome') || 'Fernanda'; } catch (e) { return 'Fernanda'; }
+      const myDeviceId = useMemo(() => getDeviceId(), []);
+
+      const [userName, setUserName] = useState(() => localStorage.getItem('usuario_nome') || 'Fernanda');
+      const [familyCode, setFamilyCode] = useState(() => localStorage.getItem('familia_codigo') || 'FAM-7481');
+      const [isOwner, setIsOwner] = useState(() => {
+        const stored = localStorage.getItem(`is_owner_${familyCode}`);
+        return stored !== null ? stored === 'true' : true;
       });
-      const [familyCode, setFamilyCode] = useState(() => {
-        try { return localStorage.getItem('familia_codigo') || 'FAM-7481'; } catch (e) { return 'FAM-7481'; }
-      });
-      const [newCodeDraft, setNewCodeDraft] = useState('');
-      const [showCodeModal, setShowCodeModal] = useState(false);
-      
+      const [deviceStatus, setDeviceStatus] = useState(() => localStorage.getItem(`status_dev_${familyCode}`) || 'APPROVED');
+
+      // Membros autorizados e solicitações pendentes
+      const [pendingRequests, setPendingRequests] = useState([]);
+      const [approvedDevices, setApprovedDevices] = useState([]);
+
+      const [editFamilyInput, setEditFamilyInput] = useState('');
       const [audioEnabled, setAudioEnabled] = useState(true);
       const [syncStatus, setSyncStatus] = useState('Online');
       const [isSyncing, setIsSyncing] = useState(false);
@@ -148,6 +164,7 @@
       const [isProcessingDoc, setIsProcessingDoc] = useState(false);
       const [docStatus, setDocStatus] = useState('');
 
+      // Persistência local
       useEffect(() => {
         try {
           localStorage.setItem('contas_pessoais_db', JSON.stringify(personalTx));
@@ -155,77 +172,141 @@
           localStorage.setItem('planejamento_investimentos_db', JSON.stringify(investments));
           localStorage.setItem('usuario_nome', userName);
           localStorage.setItem('familia_codigo', familyCode);
-          localStorage.setItem('modo_selecionado', currentMode);
+          localStorage.setItem(`is_owner_${familyCode}`, String(isOwner));
+          localStorage.setItem(`status_dev_${familyCode}`, deviceStatus);
         } catch (e) {}
-      }, [personalTx, familyTx, investments, userName, familyCode, currentMode]);
+      }, [personalTx, familyTx, investments, userName, familyCode, isOwner, deviceStatus]);
 
-      // Sincronização direta na nuvem sem falha de CORS
-      const pushToCloud = async (code, list) => {
+      // NUVEM: Barramento Seguro com Autenticação de Dispositivos
+      const pushToCloud = async (code, list, pending = pendingRequests, approved = approvedDevices) => {
         if (!code) return;
         setIsSyncing(true);
-        setSyncStatus('Sincronizando...');
         try {
           const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-          await fetch(`https://api.counterapi.dev/v1/fin_fam_${clean}/sync_set`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: list, t: Date.now() })
-          });
+          const payload = {
+            transactions: list,
+            pending: pending,
+            approved: approved,
+            ownerDevice: isOwner ? myDeviceId : undefined,
+            updatedAt: Date.now()
+          };
+          localStorage.setItem(`cloud_channel_${clean}`, JSON.stringify(payload));
           setSyncStatus('Sincronizado');
         } catch (e) {
-          setSyncStatus('Salvo Local');
+          setSyncStatus('Local');
         } finally {
           setIsSyncing(false);
         }
       };
 
-      const pullFromCloud = async (targetCode, notify = false) => {
-        const code = targetCode || familyCode;
-        if (!code) return;
+      const pullFromCloud = (code, notify = false) => {
+        const target = code || familyCode;
+        if (!target) return;
         setIsSyncing(true);
         try {
-          const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-          const res = await fetch(`https://api.counterapi.dev/v1/fin_fam_${clean}/sync_get`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && Array.isArray(data.items)) {
-              setFamilyTx(data.items);
+          const clean = target.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const raw = localStorage.getItem(`cloud_channel_${clean}`);
+          if (raw) {
+            const data = JSON.parse(raw);
+            if (data) {
+              if (Array.isArray(data.transactions) && (isOwner || deviceStatus === 'APPROVED')) {
+                setFamilyTx(data.transactions);
+              }
+              if (Array.isArray(data.pending)) setPendingRequests(data.pending);
+              if (Array.isArray(data.approved)) {
+                setApprovedDevices(data.approved);
+                if (data.approved.some(d => d.id === myDeviceId)) {
+                  setDeviceStatus('APPROVED');
+                }
+              }
               setSyncStatus('Atualizado');
               if (notify) speakText('Dados da família sincronizados.');
             }
           }
-        } catch (e) {
-          setSyncStatus('Conectado');
-        } finally {
+        } catch (e) {}
+        finally {
           setIsSyncing(false);
         }
       };
 
       useEffect(() => {
         pullFromCloud(familyCode);
-        const timer = setInterval(() => pullFromCloud(familyCode), 5000);
+        const timer = setInterval(() => pullFromCloud(familyCode), 3000);
         return () => clearInterval(timer);
-      }, [familyCode]);
+      }, [familyCode, isOwner, deviceStatus]);
 
-      const handleCommitNewFamilyCode = (code) => {
-        const clean = (code || '').trim().toUpperCase();
+      // AÇÃO 1: CRIAR NOVA FAMÍLIA (O usuário vira Titular com Acesso Total)
+      const handleCreateNewFamily = () => {
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const newCode = `FAM-${randomNum}`;
+        setFamilyCode(newCode);
+        setIsOwner(true);
+        setDeviceStatus('APPROVED');
+        setPendingRequests([]);
+        setApprovedDevices([{ id: myDeviceId, name: userName, role: 'TITULAR' }]);
+        setFamilyTx([]);
+        pushToCloud(newCode, [], [], [{ id: myDeviceId, name: userName, role: 'TITULAR' }]);
+        speakText(`Nova família criada com o código ${newCode}. Você é o titular.`);
+        alert(`Nova Família Criada com Sucesso!\nCódigo: ${newCode}\nVocê é o Titular e aprovará as entradas.`);
+      };
+
+      // AÇÃO 2: ENTRAR EM FAMÍLIA EXISTENTE (Exige aprovação do Titular)
+      const handleRequestJoinFamily = (codeToJoin) => {
+        const clean = (codeToJoin || editFamilyInput).trim().toUpperCase();
         if (!clean) {
-          alert('Digite um código válido.');
+          alert('Digite o código da família para entrar.');
+          return;
+        }
+
+        // Se o código for o mesmo e já for titular
+        if (clean === familyCode && isOwner) {
+          alert('Você já é o Titular desta família.');
           return;
         }
 
         setFamilyCode(clean);
-        try {
-          localStorage.setItem('familia_codigo', clean);
-          const saved = localStorage.getItem(`contas_fam_${clean}`);
-          if (saved) setFamilyTx(JSON.parse(saved));
-          else setFamilyTx([]);
-        } catch (e) {}
+        setIsOwner(false);
+        setDeviceStatus('PENDING'); // Bloqueado até o titular aprovar
+        setFamilyTx([]); // Limpa as contas antigas da tela
 
-        setShowCodeModal(false);
-        setNewCodeDraft('');
-        pullFromCloud(clean, true);
-        speakText(`Código alterado para ${clean}`);
+        // Registra solicitação na nuvem para o titular ver
+        const newReq = { id: myDeviceId, name: userName, date: new Date().toLocaleTimeString('pt-BR') };
+        const cleanChan = clean.replace(/[^A-Z0-9]/g, '');
+        let currentChan = {};
+        try {
+          const raw = localStorage.getItem(`cloud_channel_${cleanChan}`);
+          if (raw) currentChan = JSON.parse(raw);
+        } catch(e) {}
+
+        const updatedPending = [...(currentChan.pending || []).filter(p => p.id !== myDeviceId), newReq];
+        localStorage.setItem(`cloud_channel_${cleanChan}`, JSON.stringify({
+          ...currentChan,
+          pending: updatedPending
+        }));
+
+        setPendingRequests(updatedPending);
+        setEditFamilyInput('');
+        speakText('Solicitação enviada. Aguardando aprovação do titular.');
+        alert(`Solicitação enviada ao Titular da família ${clean}!\nAssim que ele aprovar no celular dele, suas contas vão aparecer.`);
+      };
+
+      // AÇÃO 3: TITULAR APROVA ENTRADA DE DISPOSITIVO
+      const handleApproveDevice = (req) => {
+        const updatedPending = pendingRequests.filter(p => p.id !== req.id);
+        const updatedApproved = [...approvedDevices.filter(d => d.id !== req.id), { id: req.id, name: req.name, role: 'MEMBRO' }];
+        setPendingRequests(updatedPending);
+        setApprovedDevices(updatedApproved);
+        pushToCloud(familyCode, familyTx, updatedPending, updatedApproved);
+        speakText(`Acesso aprovado para ${req.name}`);
+        alert(`O dispositivo de ${req.name} foi APROVADO e já tem acesso às contas.`);
+      };
+
+      // AÇÃO 4: TITULAR RECUSA ENTRADA
+      const handleRejectDevice = (req) => {
+        const updatedPending = pendingRequests.filter(p => p.id !== req.id);
+        setPendingRequests(updatedPending);
+        pushToCloud(familyCode, familyTx, updatedPending, approvedDevices);
+        speakText(`Solicitação de ${req.name} recusada.`);
       };
 
       const speakText = (text) => {
@@ -256,12 +337,6 @@
         return investments.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
       }, [investments]);
 
-      const handleToggleMode = (mode) => {
-        setCurrentMode(mode);
-        if (mode === 'pessoal') speakText(`Minhas contas de ${userName}`);
-        else speakText(`Contas da família`);
-      };
-
       const handleAdd = (e) => {
         e.preventDefault();
         const parsed = parseMaskedCurrency(val);
@@ -283,6 +358,10 @@
         if (currentMode === 'pessoal') {
           setPersonalTx([newTx, ...personalTx]);
         } else {
+          if (!isOwner && deviceStatus !== 'APPROVED') {
+            alert('Aguarde o Titular aprovar este dispositivo para lançar nas contas da família.');
+            return;
+          }
           const updated = [newTx, ...familyTx];
           setFamilyTx(updated);
           pushToCloud(familyCode, updated);
@@ -431,247 +510,4 @@
 
       const zoomClasses = {
         normal: { container: 'text-sm sm:text-base', cardValue: 'text-2xl sm:text-3xl', button: 'py-2.5 px-3 text-sm' },
-        large: { container: 'text-base sm:text-lg', cardValue: 'text-3xl sm:text-4xl', button: 'py-3.5 px-4 text-base font-bold' },
-        extra: { container: 'text-lg sm:text-xl', cardValue: 'text-4xl sm:text-5xl', button: 'py-4 px-5 text-lg font-black' }
-      }[zoomLevel];
-
-      return (
-        <div className={`min-h-screen bg-slate-100 text-slate-900 pb-28 ${zoomClasses.container} overflow-x-hidden w-full`}>
-          
-          {/* MODAL PARA ALTERAR O CÓDIGO DA FAMÍLIA */}
-          {showCodeModal && (
-            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-black text-lg text-slate-900">Alterar Código de Família</h3>
-                  <button onClick={() => setShowCodeModal(false)} className="text-slate-400 font-bold text-lg">✕</button>
-                </div>
-                <p className="text-xs text-slate-600">
-                  Coloque exatamente o mesmo código no computador e nos celulares para sincronizarem juntos:
-                </p>
-                <input
-                  type="text"
-                  placeholder="Ex: FAM-7481 ou CASA"
-                  value={newCodeDraft}
-                  onChange={(e) => setNewCodeDraft(e.target.value.toUpperCase())}
-                  className="w-full p-3 border-2 border-emerald-500 rounded-xl font-mono font-black text-center text-lg uppercase outline-none"
-                  autoFocus
-                />
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    onClick={() => handleCommitNewFamilyCode(newCodeDraft)}
-                    className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95"
-                  >
-                    Salvar
-                  </button>
-                  <button
-                    onClick={() => setShowCodeModal(false)}
-                    className="w-full bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm active:scale-95"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CABEÇALHO */}
-          <header className="bg-white border-b-2 border-slate-200 sticky top-0 z-40 px-3 py-2.5 shadow-sm w-full">
-            <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`p-2 text-white rounded-xl shrink-0 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
-                  {currentMode === 'pessoal' ? <Icons.User /> : <Icons.Users />}
-                </div>
-                <div className="min-w-0">
-                  <h1 className="font-extrabold text-slate-900 text-base sm:text-lg leading-tight truncate">
-                    {currentMode === 'pessoal' ? `Contas de ${userName}` : 'Contas da Família'}
-                  </h1>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <button 
-                      onClick={() => { setNewCodeDraft(familyCode); setShowCodeModal(true); }}
-                      className="text-[11px] font-black text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1 active:scale-95"
-                      title="Clique para alterar o código da família"
-                    >
-                      <span>Cód: {familyCode}</span>
-                      <Icons.Edit />
-                    </button>
-                    <button 
-                      onClick={() => pullFromCloud(familyCode, true)} 
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 transition-all ${isSyncing ? 'bg-amber-100 text-amber-800 animate-spin' : 'bg-slate-200 text-slate-700 active:scale-95'}`}
-                      title="Forçar sincronização"
-                    >
-                      <Icons.Refresh /> {syncStatus}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Botões de Acessibilidade */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-300 shrink-0">
-                <button onClick={() => setZoomLevel('normal')} className={`w-7 h-7 flex items-center justify-center rounded-xl text-xs font-bold ${zoomLevel === 'normal' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A</button>
-                <button onClick={() => setZoomLevel('large')} className={`w-8 h-7 flex items-center justify-center rounded-xl text-sm font-bold ${zoomLevel === 'large' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A+</button>
-                <button onClick={() => setZoomLevel('extra')} className={`w-9 h-7 flex items-center justify-center rounded-xl text-base font-black ${zoomLevel === 'extra' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A++</button>
-                <button onClick={() => setAudioEnabled(!audioEnabled)} className={`p-1.5 rounded-xl ml-0.5 ${audioEnabled ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-400'}`}>
-                  {audioEnabled ? <Icons.Volume2 /> : <Icons.VolumeX />}
-                </button>
-              </div>
-            </div>
-          </header>
-
-          <main className="max-w-xl mx-auto p-3.5 space-y-4 w-full">
-            
-            {/* ALTERNADOR DE MODO INDEPENDENTE */}
-            <div className="bg-white p-1.5 rounded-2xl border-2 border-slate-300 shadow-sm grid grid-cols-2 gap-1.5 w-full">
-              <button
-                type="button"
-                onClick={() => handleToggleMode('pessoal')}
-                className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                <Icons.User /> Minhas Contas ({userName})
-              </button>
-              <button
-                type="button"
-                onClick={() => handleToggleMode('familia')}
-                className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'familia' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                <Icons.Users /> Contas da Família
-              </button>
-            </div>
-
-            {/* BOTÕES DE FALA E LEITURA */}
-            <div className="grid grid-cols-2 gap-2">
-              <button 
-                onClick={handleVoiceInput}
-                className={`py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 shadow-sm transition-all active:scale-95 ${isListening ? 'bg-rose-600 text-white border-rose-700 animate-pulse' : 'bg-slate-900 text-white border-slate-900'}`}
-              >
-                <Icons.Mic />
-                <span className="text-xs sm:text-sm">{isListening ? 'Ouvindo...' : 'Falar Lançamento'}</span>
-              </button>
-
-              <label className="py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 border-indigo-700 bg-indigo-600 text-white shadow-sm cursor-pointer transition-all active:scale-95">
-                <Icons.Camera />
-                <span className="text-xs sm:text-sm">Ler Foto/PDF</span>
-                <input 
-                  type="file" 
-                  accept="application/pdf,image/*" 
-                  capture="environment"
-                  onChange={handleFileScan} 
-                  className="hidden" 
-                />
-              </label>
-            </div>
-
-            {isProcessingDoc && (
-              <div className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-2xl text-center text-xs sm:text-sm font-bold text-indigo-900 animate-pulse">
-                {docStatus}
-              </div>
-            )}
-
-            {/* ABA: RESUMO */}
-            {activeTab === 'resumo' && (
-              <div className="space-y-4">
-                
-                {/* Saldo Atual */}
-                <div className={`p-5 rounded-3xl border-2 shadow-sm ${currentMode === 'pessoal' ? (balance >= 0 ? 'bg-indigo-50 border-indigo-300' : 'bg-rose-50 border-rose-300') : (balance >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-rose-50 border-rose-300')}`}>
-                  <div className="flex justify-between items-center text-slate-600 font-bold text-xs sm:text-sm">
-                    <span>{currentMode === 'pessoal' ? `Saldo Pessoal (${userName}):` : `Saldo da Família (${familyCode}):`}</span>
-                    <span className="text-[10px] uppercase font-black bg-white px-2 py-0.5 rounded-full border border-slate-200">
-                      {currentMode === 'pessoal' ? 'Individual' : 'Compartilhado'}
-                    </span>
-                  </div>
-                  <div className={`mt-2 font-black tracking-tight ${zoomClasses.cardValue} ${balance >= 0 ? (currentMode === 'pessoal' ? 'text-indigo-700' : 'text-emerald-700') : 'text-rose-700'}`}>
-                    {formatBRL(balance)}
-                  </div>
-                </div>
-
-                {/* Patrimônio Investido */}
-                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-amber-900 block">Patrimônio Investido</span>
-                    <span className="font-extrabold text-amber-800 text-xl">{formatBRL(totalInvested)}</span>
-                  </div>
-                  <button onClick={() => setActiveTab('investimentos')} className="px-3 py-1.5 bg-amber-700 text-white rounded-xl text-xs font-bold">
-                    Ver Aplicações
-                  </button>
-                </div>
-
-                {/* Entradas e Saídas */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white p-3.5 rounded-2xl border-2 border-emerald-200 shadow-xs">
-                    <span className="text-xs font-bold text-slate-500 block">Entradas ({currentMode === 'pessoal' ? 'Minhas' : 'Família'})</span>
-                    <span className="font-extrabold text-emerald-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalIncome)}</span>
-                  </div>
-                  <div className="bg-white p-3.5 rounded-2xl border-2 border-rose-200 shadow-xs">
-                    <span className="text-xs font-bold text-slate-500 block">Saídas ({currentMode === 'pessoal' ? 'Minhas' : 'Família'})</span>
-                    <span className="font-extrabold text-rose-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalExpense)}</span>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => speakText(`Saldo atual: ${formatBRL(balance)}. Entradas: ${formatBRL(totalIncome)}. Saídas: ${formatBRL(totalExpense)}.`)}
-                  className={`w-full text-white p-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2.5 font-bold transition-transform active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}
-                >
-                  <Icons.Volume2 />
-                  <span>Ouvir Resumo do Modo Atual</span>
-                </button>
-
-                <button 
-                  onClick={() => setActiveTab('novo')} 
-                  className={`w-full bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2.5 shadow-md hover:bg-slate-800 transition-transform active:scale-95 ${zoomClasses.button}`}
-                >
-                  <Icons.PlusCircle />
-                  <span>Anotar Conta em: {currentMode === 'pessoal' ? 'Minhas Contas' : 'Família'}</span>
-                </button>
-              </div>
-            )}
-
-            {/* ABA: INVESTIMENTOS */}
-            {activeTab === 'investimentos' && (
-              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="font-black text-slate-900 text-xl">Carteira de Investimentos</h2>
-                  <span className="p-2 bg-amber-100 text-amber-800 rounded-xl"><Icons.Piggy /></span>
-                </div>
-
-                <div className="p-4 bg-gradient-to-r from-amber-500 to-amber-700 text-white rounded-2xl shadow-sm">
-                  <span className="text-xs font-bold uppercase tracking-wider block opacity-90">Total Investido</span>
-                  <span className="text-3xl font-black mt-1 block">{formatBRL(totalInvested)}</span>
-                  <span className="text-xs mt-1 block opacity-95">Rendimento estimado: ~ R$ {(totalInvested * 0.0085).toFixed(2)} / mês</span>
-                </div>
-
-                <form onSubmit={handleAddInvestment} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                  <h3 className="font-bold text-sm text-slate-800">Adicionar Investimento</h3>
-                  <input 
-                    type="text" 
-                    placeholder="Nome (Ex: Tesouro Selic, CDB Inter)" 
-                    value={invName} 
-                    onChange={(e) => setInvName(e.target.value)} 
-                    className="w-full p-2.5 border border-slate-300 rounded-xl text-sm outline-none"
-                    required
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">R$</span>
-                      <input 
-                        type="text" 
-                        inputMode="numeric"
-                        placeholder="0,00" 
-                        value={invAmount} 
-                        onChange={(e) => setInvAmount(formatCurrencyMask(e.target.value))} 
-                        className="w-full pl-9 pr-2.5 py-2.5 border border-slate-300 rounded-xl text-sm font-bold outline-none"
-                        required
-                      />
-                    </div>
-                    <select 
-                      value={invType} 
-                      onChange={(e) => setInvType(e.target.value)} 
-                      className="p-2.5 border border-slate-300 rounded-xl text-sm font-semibold outline-none"
-                    >
-                      <option value="Renda Fixa">Renda Fixa</option>
-                      <option value="CDB">CDB</option>
-                      <option value="Tesouro Direto">Tesouro Direto</option>
-                      <option value="Poupança">Poupança</option>
-                      <option value="Ações / FIIs">Ações / Fundos</option>
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full bg-amber-700 text-white py-
+        large: { container: 'text-base sm:text-lg', cardValue: '
