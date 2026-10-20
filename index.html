@@ -74,41 +74,89 @@
       ]
     };
 
+    // Função para limpar e converter valores como 100.000,00 ou 100000 para número puro
+    function parseBrazilianNumber(valString) {
+      if (!valString) return NaN;
+      let clean = String(valString).trim();
+      // Se contiver ponto e vírgula (ex: 120.000,50), remove o ponto e troca a vírgula
+      if (clean.includes('.') && clean.includes(',')) {
+        clean = clean.replace(/\./g, '').replace(',', '.');
+      } else if (clean.includes(',')) {
+        clean = clean.replace(',', '.');
+      } else if ((clean.match(/\./g) || []).length > 1) {
+        clean = clean.replace(/\./g, '');
+      }
+      return parseFloat(clean);
+    }
+
+    // Conversor de voz para números falados em português (ex: "cem mil", "100 mil", "cinquenta mil")
+    function parseSpokenAmount(text) {
+      let t = text.toLowerCase().replace(/r\$/g, '').trim();
+
+      // Casos com palavra "mil" ou "milhão"
+      if (t.includes('milhão') || t.includes('milhões')) {
+        let m = t.match(/(\d+([,\.]\d+)?)\s*milh/);
+        if (m) return parseFloat(m[1].replace(',', '.')) * 1000000;
+        if (t.includes('um milhão')) return 1000000;
+      }
+
+      if (t.includes('mil')) {
+        // Ex: "100 mil", "150 mil"
+        let m = t.match(/(\d+([,\.]\d+)?)\s*mil/);
+        if (m) {
+          return parseFloat(m[1].replace(',', '.')) * 1000;
+        }
+        // Ex por extenso: "cem mil"
+        if (t.includes('cem mil') || t.includes('100 mil')) return 100000;
+        if (t.includes('duzentos mil') || t.includes('200 mil')) return 200000;
+        if (t.includes('trezentos mil') || t.includes('300 mil')) return 300000;
+        if (t.includes('quatrocentos mil') || t.includes('400 mil')) return 400000;
+        if (t.includes('quinhentos mil') || t.includes('500 mil')) return 500000;
+        if (t.includes('cinquenta mil') || t.includes('50 mil')) return 50000;
+        if (t.includes('dez mil') || t.includes('10 mil')) return 10000;
+        if (t.includes('vinte mil') || t.includes('20 mil')) return 20000;
+        if (t.includes('trinta mil') || t.includes('30 mil')) return 30000;
+      }
+
+      // Procura números com pontuação ou dígitos diretos
+      const regex = /(\d{1,3}(?:\.\d{3})*,\d{2})|(\d+([,\.]\d+)?)/;
+      const match = t.match(regex);
+      if (match) {
+        return parseBrazilianNumber(match[0]);
+      }
+      return NaN;
+    }
+
     function App() {
       const [userName, setUserName] = useState(() => localStorage.getItem('usuario_nome') || 'Fernanda');
       const [familyCode, setFamilyCode] = useState(() => localStorage.getItem('familia_codigo') || 'FAM-7481');
-      const [inputCode, setInputCode] = useState('');
       const [audioEnabled, setAudioEnabled] = useState(true);
 
-      // MODO ATIVO: 'pessoal' (Minhas Contas) OU 'familia' (Contas da Família)
       const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('modo_selecionado') || 'pessoal');
 
-      // 1. BANCO DE DADOS PESSOAL (Apenas o seu dinheiro)
       const [personalTx, setPersonalTx] = useState(() => {
         try {
           const s = localStorage.getItem('contas_pessoais_db');
           return s ? JSON.parse(s) : [
-            { id: 'p1', description: 'Meu Salário', amount: 5000, type: 'income', category: 'Salario', date: new Date().toISOString().split('T')[0] }
+            { id: 'p1', description: 'Meu Salário', amount: 100000, type: 'income', category: 'Salario', date: new Date().toISOString().split('T')[0] }
           ];
         } catch { return []; }
       });
 
-      // 2. BANCO DE DADOS DA FAMÍLIA (Contas compartilhadas da casa)
       const [familyTx, setFamilyTx] = useState(() => {
         try {
           const s = localStorage.getItem('contas_familia_db');
           return s ? JSON.parse(s) : [
-            { id: 'f1', description: 'Supermercado da Casa', amount: 1200, type: 'expense', category: 'Mercado', date: new Date().toISOString().split('T')[0], author: 'Fernanda' }
+            { id: 'f1', description: 'Compra de Imóvel / Reforma', amount: 150000, type: 'expense', category: 'Moradia', date: new Date().toISOString().split('T')[0], author: 'Fernanda' }
           ];
         } catch { return []; }
       });
 
-      // Investimentos
       const [investments, setInvestments] = useState(() => {
         try {
           const s = localStorage.getItem('planejamento_investimentos_db');
           return s ? JSON.parse(s) : [
-            { id: 'i1', name: 'Tesouro Selic 2029', type: 'Renda Fixa', amount: 15000, yieldRate: '10.75% a.a.' }
+            { id: 'i1', name: 'Tesouro Selic 2029', type: 'Renda Fixa', amount: 100000, yieldRate: '10.75% a.a.' }
           ];
         } catch { return []; }
       });
@@ -121,7 +169,6 @@
       const [zoomLevel, setZoomLevel] = useState('large');
       const [activeTab, setActiveTab] = useState('resumo');
 
-      // Formulário
       const [desc, setDesc] = useState('');
       const [val, setVal] = useState('');
       const [txType, setTxType] = useState('expense');
@@ -131,7 +178,6 @@
       const [isProcessingDoc, setIsProcessingDoc] = useState(false);
       const [docStatus, setDocStatus] = useState('');
 
-      // Guardar nos armazenamentos locais
       useEffect(() => {
         localStorage.setItem('contas_pessoais_db', JSON.stringify(personalTx));
         localStorage.setItem('contas_familia_db', JSON.stringify(familyTx));
@@ -141,7 +187,6 @@
         localStorage.setItem('modo_selecionado', currentMode);
       }, [personalTx, familyTx, investments, userName, familyCode, currentMode]);
 
-      // Sincronização em Nuvem: apenas a lista da Família é enviada/recebida
       const syncFamilyWithCloud = async (code, list) => {
         if (!code) return;
         try {
@@ -153,7 +198,6 @@
         } catch (e) {}
       };
 
-      // Receber atualizações da família a cada 4 segundos
       useEffect(() => {
         if (!familyCode) return;
         const clean = familyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -181,17 +225,15 @@
           window.speechSynthesis.cancel();
           const u = new SpeechSynthesisUtterance(text);
           u.lang = 'pt-BR';
-          u.rate = 0.9;
+          u.rate = 0.95;
           window.speechSynthesis.speak(u);
         } catch(e) {}
       };
 
       const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-      // Transações do Modo Ativo
       const currentTransactions = currentMode === 'pessoal' ? personalTx : familyTx;
 
-      // Cálculos estritamente do modo ativo
       const { totalIncome, totalExpense, balance } = useMemo(() => {
         let inc = 0, exp = 0;
         currentTransactions.forEach(t => {
@@ -205,22 +247,21 @@
         return investments.reduce((acc, curr) => acc + curr.amount, 0);
       }, [investments]);
 
-      // Alternar Modo (Pessoal vs Família)
       const handleToggleMode = (mode) => {
         setCurrentMode(mode);
         if (mode === 'pessoal') {
-          speakText(`Alternado para Minhas Contas Pessoais de ${userName}`);
+          speakText(`Modo pessoal de ${userName}`);
         } else {
-          speakText(`Alternado para Contas da Família no código ${familyCode}`);
+          speakText(`Modo família`);
         }
       };
 
-      // Adicionar Transação (grava no cofre certo)
+      // Adicionar Transação com suporte a números grandes (100 mil+)
       const handleAdd = (e) => {
         e.preventDefault();
-        const parsed = parseFloat(val.replace(',', '.'));
+        const parsed = parseBrazilianNumber(val);
         if (!desc.trim() || isNaN(parsed) || parsed <= 0) {
-          alert('Preencha a descrição e um valor válido.');
+          alert('Preencha a descrição e um valor numérico válido.');
           return;
         }
 
@@ -245,7 +286,7 @@
         setDesc('');
         setVal('');
         setActiveTab('resumo');
-        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} guardada em ${currentMode === 'pessoal' ? 'Minhas Contas' : 'Contas da Família'}.`);
+        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} adicionada.`);
       };
 
       const handleDelete = (id, description) => {
@@ -259,12 +300,12 @@
         speakText(`${description} excluído.`);
       };
 
-      // Adicionar Investimento
+      // Adicionar Investimento com suporte a 100 mil+
       const handleAddInvestment = (e) => {
         e.preventDefault();
-        const parsed = parseFloat(invAmount.replace(',', '.'));
+        const parsed = parseBrazilianNumber(invAmount);
         if (!invName.trim() || isNaN(parsed) || parsed <= 0) {
-          alert('Preencha o nome do investimento e o valor aplicado.');
+          alert('Preencha o nome e um valor válido.');
           return;
         }
 
@@ -282,12 +323,17 @@
         speakText(`Investimento de ${formatBRL(parsed)} registrado.`);
       };
 
-      // Lançamento por Voz
+      // 1. RECONHECIMENTO DE VOZ (SEM CONFLITO COM O ALTO-FALANTE E COM SUPORTE A 100 MIL)
       const handleVoiceInput = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          alert('Use o Google Chrome para falar o lançamento.');
+          alert('Reconhecimento de voz não suportado neste navegador. Use o Google Chrome.');
           return;
+        }
+
+        // Silencia imediatamente o alto-falante para liberar o microfone do celular
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
         }
 
         const recognition = new SpeechRecognition();
@@ -297,56 +343,53 @@
 
         recognition.onstart = () => {
           setIsListening(true);
-          speakText('Diga a conta e o valor.');
         };
 
         recognition.onresult = (event) => {
           const text = event.results[0][0].transcript.toLowerCase();
           setIsListening(false);
 
-          const numberMatch = text.match(/\d+([,\.]\d+)?/);
-          let extractedAmount = '';
-          if (numberMatch) {
-            extractedAmount = numberMatch[0].replace(',', '.');
-          }
+          // Converte valores falados como "cem mil", "100 mil", etc.
+          const numericVal = parseSpokenAmount(text);
 
           let type = 'expense';
-          if (text.includes('ganhei') || text.includes('recebi') || text.includes('salário') || text.includes('aposentadoria')) {
+          if (text.includes('ganhei') || text.includes('recebi') || text.includes('salário') || text.includes('aposentadoria') || text.includes('depósito')) {
             type = 'income';
           }
 
           let cat = 'OutrasDespesas';
           if (text.includes('remédio') || text.includes('farmácia')) cat = 'Remedios';
-          else if (text.includes('mercado') || text.includes('compras')) cat = 'Mercado';
+          else if (text.includes('mercado') || text.includes('compras') || text.includes('feira')) cat = 'Mercado';
           else if (text.includes('luz') || text.includes('água') || text.includes('gás')) cat = 'ContasCasa';
+          else if (text.includes('aluguel') || text.includes('condomínio') || text.includes('reforma') || text.includes('imóvel')) cat = 'Moradia';
           else if (text.includes('salário')) cat = 'Salario';
-          else if (text.includes('aposentadoria')) cat = 'Aposentadoria';
+          else if (text.includes('aposentadoria') || text.includes('inss')) cat = 'Aposentadoria';
 
           setDesc(text.charAt(0).toUpperCase() + text.slice(1));
-          if (extractedAmount) setVal(extractedAmount);
+          if (!isNaN(numericVal) && numericVal > 0) {
+            setVal(numericVal.toString());
+          }
           setTxType(type);
           setTxCat(cat);
 
-          speakText(`Reconhecido: ${text}. Confira e toque em Salvar.`);
           setActiveTab('novo');
+          speakText(`Entendi: ${text}. Toque em Salvar para confirmar.`);
         };
 
         recognition.onerror = () => {
           setIsListening(false);
-          speakText('Não consegui ouvir. Tente novamente.');
         };
 
         recognition.start();
       };
 
-      // Leitura de Imagem e PDF
+      // 2. LEITURA DE PDF / FOTO COM SUPORTE A VALORES ALTOS (100 MIL+)
       const handleFileScan = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         setIsProcessingDoc(true);
-        setDocStatus('Lendo extrato/documento...');
-        speakText('Processando documento, aguarde um instante.');
+        setDocStatus('Processando documento...');
 
         try {
           let fullText = '';
@@ -371,7 +414,7 @@
         } catch (err) {
           setIsProcessingDoc(false);
           setDocStatus('');
-          alert('Erro ao processar o documento.');
+          alert('Erro ao processar o arquivo.');
         }
       };
 
@@ -379,12 +422,17 @@
         setIsProcessingDoc(false);
         setDocStatus('');
 
-        const matches = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})/gi);
+        // Regex para capturar valores com pontos de milhar e vírgula decimal
+        const matches = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})|(\d+([,\.]\d+)?)/gi);
         let finalVal = '';
         if (matches && matches.length > 0) {
-          const cleanVals = matches.map(m => parseFloat(m.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()));
-          const maxVal = Math.max(...cleanVals);
-          if (!isNaN(maxVal)) finalVal = maxVal.toString();
+          const cleanVals = matches
+            .map(m => parseBrazilianNumber(m))
+            .filter(n => !isNaN(n));
+          if (cleanVals.length > 0) {
+            const maxVal = Math.max(...cleanVals);
+            finalVal = maxVal.toString();
+          }
         }
 
         let cat = 'OutrasDespesas';
@@ -392,7 +440,7 @@
         const lower = text.toLowerCase();
         if (lower.includes('farmacia') || lower.includes('drogaria')) cat = 'Remedios';
         else if (lower.includes('mercado') || lower.includes('supermercado')) cat = 'Mercado';
-        else if (lower.includes('luz') || lower.includes('energia') || lower.includes('enel')) cat = 'ContasCasa';
+        else if (lower.includes('luz') || lower.includes('energia')) cat = 'ContasCasa';
 
         setDesc(`Extrato: ${fileName.replace(/\.[^/.]+$/, "")}`);
         if (finalVal) setVal(finalVal);
@@ -443,7 +491,7 @@
 
           <main className="max-w-xl mx-auto p-3.5 space-y-4 w-full">
             
-            {/* ALTERNADOR DE MODO TOTALMENTE INDEPENDENTE (PESSOAL vs FAMÍLIA) */}
+            {/* ALTERNADOR DE MODO TOTALMENTE INDEPENDENTE */}
             <div className="bg-white p-1.5 rounded-2xl border-2 border-slate-300 shadow-sm grid grid-cols-2 gap-1.5 w-full">
               <button
                 type="button"
@@ -461,14 +509,14 @@
               </button>
             </div>
 
-            {/* BOTÕES DE FALA E LEITURA DE EXTRATOS */}
+            {/* BOTÕES DE FALA E LEITURA DE DOCUMENTOS */}
             <div className="grid grid-cols-2 gap-2">
               <button 
                 onClick={handleVoiceInput}
                 className={`py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 shadow-sm transition-all active:scale-95 ${isListening ? 'bg-rose-600 text-white border-rose-700 animate-pulse' : 'bg-slate-900 text-white border-slate-900'}`}
               >
                 <Icons.Mic />
-                <span className="text-xs sm:text-sm">{isListening ? 'Ouvindo...' : 'Falar Lançamento'}</span>
+                <span className="text-xs sm:text-sm">{isListening ? 'Pode Falar Agora...' : 'Falar Lançamento'}</span>
               </button>
 
               <label className="py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 border-indigo-700 bg-indigo-600 text-white shadow-sm cursor-pointer transition-all active:scale-95">
@@ -518,7 +566,7 @@
                   </button>
                 </div>
 
-                {/* Totais de Entradas e Saídas do Modo Ativo */}
+                {/* Totais de Entradas e Saídas */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white p-3.5 rounded-2xl border-2 border-emerald-200 shadow-xs">
                     <span className="text-xs font-bold text-slate-500 block">Entradas ({currentMode === 'pessoal' ? 'Minhas' : 'Família'})</span>
@@ -530,16 +578,14 @@
                   </div>
                 </div>
 
-                {/* Botão de Ouvir Resumo */}
                 <button 
-                  onClick={() => speakText(`Saldo atual de ${currentMode === 'pessoal' ? 'Minhas Contas' : 'Contas da Família'}: ${formatBRL(balance)}. Entradas: ${formatBRL(totalIncome)}. Saídas: ${formatBRL(totalExpense)}.`)}
+                  onClick={() => speakText(`Saldo atual: ${formatBRL(balance)}. Entradas: ${formatBRL(totalIncome)}. Saídas: ${formatBRL(totalExpense)}.`)}
                   className={`w-full text-white p-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2.5 font-bold transition-transform active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}
                 >
                   <Icons.Volume2 />
                   <span>Ouvir Resumo do Modo Atual</span>
                 </button>
 
-                {/* Botão de Lançar Conta */}
                 <button 
                   onClick={() => setActiveTab('novo')} 
                   className={`w-full bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2.5 shadow-md hover:bg-slate-800 transition-transform active:scale-95 ${zoomClasses.button}`}
@@ -572,14 +618,16 @@
                     value={invName} 
                     onChange={(e) => setInvName(e.target.value)} 
                     className="w-full p-2.5 border border-slate-300 rounded-xl text-sm outline-none"
+                    required
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input 
-                      type="number" 
-                      placeholder="Valor (R$)" 
+                      type="text" 
+                      placeholder="Valor (Ex: 100000)" 
                       value={invAmount} 
                       onChange={(e) => setInvAmount(e.target.value)} 
                       className="p-2.5 border border-slate-300 rounded-xl text-sm font-bold outline-none"
+                      required
                     />
                     <select 
                       value={invType} 
@@ -612,13 +660,13 @@
               </div>
             )}
 
-            {/* ABA: NOVO LANÇAMENTO */}
+            {/* ABA: NOVO LANÇAMENTO (ACEITA QUALQUER VALOR, INCLUINDO 100 MIL OU MAIS) */}
             {activeTab === 'novo' && (
               <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
                 <div className="flex justify-between items-center">
                   <h2 className="font-black text-slate-900 text-xl sm:text-2xl">Anotar Movimento</h2>
                   <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${currentMode === 'pessoal' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                    Salvando em: {currentMode === 'pessoal' ? 'Pessoal' : 'Família'}
+                    Modo: {currentMode === 'pessoal' ? 'Pessoal' : 'Família'}
                   </span>
                 </div>
 
@@ -644,7 +692,7 @@
                     <label className="block font-bold text-slate-700 mb-1 text-sm">O que é?</label>
                     <input 
                       type="text" 
-                      placeholder="Ex: Farmácia, Mercado, Salário..." 
+                      placeholder="Ex: Salário, Carro, Reforma, Farmácia..." 
                       value={desc} 
                       onChange={(e) => setDesc(e.target.value)} 
                       className="w-full p-3.5 border-2 border-slate-300 rounded-2xl text-base font-medium outline-none focus:border-emerald-600" 
@@ -655,9 +703,8 @@
                   <div>
                     <label className="block font-bold text-slate-700 mb-1 text-sm">Valor (R$)</label>
                     <input 
-                      type="number" 
-                      step="0.01" 
-                      placeholder="0,00" 
+                      type="text" 
+                      placeholder="Ex: 100000 ou 100.000,00" 
                       value={val} 
                       onChange={(e) => setVal(e.target.value)} 
                       className="w-full p-3.5 border-2 border-slate-300 rounded-2xl text-2xl font-black text-slate-900 outline-none focus:border-emerald-600" 
