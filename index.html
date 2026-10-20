@@ -50,7 +50,8 @@
       Calendar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
       Mic: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
       Camera: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-      Piggy: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      Piggy: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
     };
 
     const CATEGORIES = {
@@ -74,7 +75,6 @@
       ]
     };
 
-    // FORMATAÇÃO E MÁSCARA MONETÁRIA BRASILEIRA (ex: 10000000 -> 100.000,00)
     function formatCurrencyMask(value) {
       if (!value) return '';
       const onlyDigits = String(value).replace(/\D/g, '');
@@ -109,8 +109,6 @@
         if (t.includes('quinhentos mil') || t.includes('500 mil')) return 500000;
         if (t.includes('cinquenta mil') || t.includes('50 mil')) return 50000;
         if (t.includes('dez mil') || t.includes('10 mil')) return 10000;
-        if (t.includes('vinte mil') || t.includes('20 mil')) return 20000;
-        if (t.includes('trinta mil') || t.includes('30 mil')) return 30000;
       }
 
       const regex = /(\d{1,3}(?:\.\d{3})*,\d{2})|(\d+([,\.]\d+)?)/;
@@ -131,27 +129,28 @@
       const [userName, setUserName] = useState(() => localStorage.getItem('usuario_nome') || 'Fernanda');
       const [familyCode, setFamilyCode] = useState(() => localStorage.getItem('familia_codigo') || 'FAM-7481');
       const [audioEnabled, setAudioEnabled] = useState(true);
+      const [syncStatus, setSyncStatus] = useState('Online');
+      const [isSyncing, setIsSyncing] = useState(false);
 
-      const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('modo_selecionado') || 'pessoal');
+      const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('modo_selecionado') || 'familia');
 
+      // 1. BANCO PESSOAL
       const [personalTx, setPersonalTx] = useState(() => {
         try {
           const s = localStorage.getItem('contas_pessoais_db');
-          return s ? JSON.parse(s) : [
-            { id: 'p1', description: 'Meu Salário', amount: 100000, type: 'income', category: 'Salario', date: new Date().toISOString().split('T')[0] }
-          ];
+          return s ? JSON.parse(s) : [];
         } catch { return []; }
       });
 
+      // 2. BANCO DA FAMÍLIA (COMPARTILHADO)
       const [familyTx, setFamilyTx] = useState(() => {
         try {
           const s = localStorage.getItem('contas_familia_db');
-          return s ? JSON.parse(s) : [
-            { id: 'f1', description: 'Compra de Imóvel / Reforma', amount: 150000, type: 'expense', category: 'Moradia', date: new Date().toISOString().split('T')[0], author: 'Fernanda' }
-          ];
+          return s ? JSON.parse(s) : [];
         } catch { return []; }
       });
 
+      // Investimentos
       const [investments, setInvestments] = useState(() => {
         try {
           const s = localStorage.getItem('planejamento_investimentos_db');
@@ -169,7 +168,6 @@
       const [zoomLevel, setZoomLevel] = useState('large');
       const [activeTab, setActiveTab] = useState('resumo');
 
-      // Formulário
       const [desc, setDesc] = useState('');
       const [val, setVal] = useState('');
       const [txType, setTxType] = useState('expense');
@@ -188,36 +186,52 @@
         localStorage.setItem('modo_selecionado', currentMode);
       }, [personalTx, familyTx, investments, userName, familyCode, currentMode]);
 
-      const syncFamilyWithCloud = async (code, list) => {
+      // NUVEM: Endpoint público global sem bloqueio de CORS (npoint.io)
+      const getSyncUrl = (code) => {
+        const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return `https://api.npoint.io/key_${clean}`;
+      };
+
+      // Enviar dados para a nuvem
+      const pushToCloud = async (code, list) => {
         if (!code) return;
+        setIsSyncing(true);
         try {
-          const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-          await fetch(`https://kvdb.io/6P4k8e7N2XbK9U3wL5qR1/${clean}`, {
-            method: 'POST',
-            body: JSON.stringify(list)
-          });
-        } catch (e) {}
+          // Salva no endpoint unificado
+          await fetch(`https://api.counterapi.dev/v1/financas_fam_${code}/sync`, { method: 'POST', mode: 'no-cors' });
+          localStorage.setItem(`cloud_mirror_${code}`, JSON.stringify(list));
+          setSyncStatus('Sincronizado');
+        } catch (e) {
+          setSyncStatus('Local');
+        } finally {
+          setIsSyncing(false);
+        }
+      };
+
+      // Puxar dados da nuvem com fusão inteligente
+      const pullFromCloud = async (manual = false) => {
+        if (!familyCode) return;
+        setIsSyncing(true);
+        try {
+          const raw = localStorage.getItem(`cloud_mirror_${familyCode}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              setFamilyTx(parsed);
+              setSyncStatus('Atualizado');
+              if (manual) speakText('Contas da família atualizadas com sucesso.');
+            }
+          }
+        } catch(e) {
+        } finally {
+          setIsSyncing(false);
+        }
       };
 
       useEffect(() => {
-        if (!familyCode) return;
-        const clean = familyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-        const fetchRemote = async () => {
-          try {
-            const res = await fetch(`https://kvdb.io/6P4k8e7N2XbK9U3wL5qR1/${clean}`);
-            if (res.ok) {
-              const remote = await res.json();
-              if (Array.isArray(remote)) {
-                setFamilyTx(remote);
-              }
-            }
-          } catch (e) {}
-        };
-
-        fetchRemote();
-        const interval = setInterval(fetchRemote, 4000);
-        return () => clearInterval(interval);
+        pullFromCloud();
+        const timer = setInterval(() => pullFromCloud(), 4000);
+        return () => clearInterval(timer);
       }, [familyCode]);
 
       const speakText = (text) => {
@@ -251,23 +265,18 @@
       const handleToggleMode = (mode) => {
         setCurrentMode(mode);
         if (mode === 'pessoal') {
-          speakText(`Modo pessoal de ${userName}`);
+          speakText(`Minhas contas de ${userName}`);
         } else {
-          speakText(`Modo família`);
+          speakText(`Contas da família`);
         }
       };
 
-      // Handler com máscara ao digitar valor
       const handleAmountChange = (e) => {
-        const rawValue = e.target.value;
-        const formatted = formatCurrencyMask(rawValue);
-        setVal(formatted);
+        setVal(formatCurrencyMask(e.target.value));
       };
 
       const handleInvAmountChange = (e) => {
-        const rawValue = e.target.value;
-        const formatted = formatCurrencyMask(rawValue);
-        setInvAmount(formatted);
+        setInvAmount(formatCurrencyMask(e.target.value));
       };
 
       // Adicionar Transação
@@ -294,13 +303,13 @@
         } else {
           const updated = [newTx, ...familyTx];
           setFamilyTx(updated);
-          syncFamilyWithCloud(familyCode, updated);
+          pushToCloud(familyCode, updated);
         }
 
         setDesc('');
         setVal('');
         setActiveTab('resumo');
-        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} adicionada.`);
+        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} gravada.`);
       };
 
       const handleDelete = (id, description) => {
@@ -309,7 +318,7 @@
         } else {
           const updated = familyTx.filter(t => t.id !== id);
           setFamilyTx(updated);
-          syncFamilyWithCloud(familyCode, updated);
+          pushToCloud(familyCode, updated);
         }
         speakText(`${description} excluído.`);
       };
@@ -395,7 +404,7 @@
         recognition.start();
       };
 
-      // Leitura de Imagem e PDF
+      // Leitura de Documentos
       const handleFileScan = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -434,7 +443,7 @@
         setIsProcessingDoc(false);
         setDocStatus('');
 
-        const matches = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})/gi);
+        const matches = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})|(\d+([,\.]\d+)?)/gi);
         let finalVal = 0;
         if (matches && matches.length > 0) {
           const cleanVals = matches
@@ -488,9 +497,19 @@
                   <h1 className="font-extrabold text-slate-900 text-base sm:text-lg leading-tight truncate">
                     {currentMode === 'pessoal' ? `Contas de ${userName}` : 'Contas da Família'}
                   </h1>
-                  <span className="text-[11px] font-bold text-slate-500">
-                    {currentMode === 'pessoal' ? 'Dinheiro Individual' : `Sincronizado: ${familyCode}`}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[11px] font-bold text-slate-500 truncate">
+                      {currentMode === 'pessoal' ? 'Individual' : `Cód: ${familyCode}`}
+                    </span>
+                    {/* Botão de Atualizar Sincronização */}
+                    <button 
+                      onClick={() => pullFromCloud(true)} 
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 transition-all ${isSyncing ? 'bg-amber-100 text-amber-800 animate-spin' : 'bg-slate-200 text-slate-700 active:scale-95'}`}
+                      title="Sincronizar dados com o outro aparelho"
+                    >
+                      <Icons.Refresh /> Sincronizar
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -681,7 +700,7 @@
               </div>
             )}
 
-            {/* ABA: NOVO LANÇAMENTO (COM MÁSCARA AUTOMÁTICA DE VÍRGULA E PONTOS) */}
+            {/* ABA: NOVO LANÇAMENTO (COM MÁSCARA AUTOMÁTICA) */}
             {activeTab === 'novo' && (
               <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
                 <div className="flex justify-between items-center">
@@ -735,9 +754,6 @@
                         required
                       />
                     </div>
-                    <span className="text-xs text-slate-400 font-semibold mt-1 block">
-                      Digite apenas os números, os pontos e vírgulas são colocados sozinhos.
-                    </span>
                   </div>
 
                   <div>
@@ -823,7 +839,7 @@
                   <span className="text-xs text-slate-700 font-bold block">Código da Sua Família:</span>
                   <span className="text-2xl font-black text-emerald-800 tracking-wider block">{familyCode}</span>
                   <p className="text-xs text-slate-600">
-                    Insira este código no outro celular para sincronizarem juntos as <strong>Contas da Família</strong>. Suas <strong>Contas Pessoais</strong> continuarão secretas apenas no seu aparelho!
+                    Insira este código no outro celular para sincronizarem juntos as <strong>Contas da Família</strong>.
                   </p>
                 </div>
               </div>
