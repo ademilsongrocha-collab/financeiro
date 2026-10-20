@@ -5,15 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Planejamento Financeiro Fácil & Família</title>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- React e ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Leitor de PDF e OCR de Fotos -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 
@@ -31,27 +26,28 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useRef } = React;
 
     if (window.pdfjsLib) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     }
 
     const Icons = {
-      Wallet: () => <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>,
-      TrendingUp: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>,
-      TrendingDown: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>,
-      Users: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
-      User: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
-      Volume2: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z" /></svg>,
-      VolumeX: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>,
+      Wallet: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>,
+      TrendingUp: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>,
+      TrendingDown: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>,
+      Users: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+      User: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
+      Volume2: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z" /></svg>,
+      VolumeX: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>,
       PlusCircle: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
       Trash2: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
       Calendar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-      Mic: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
-      Camera: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-      Piggy: () => <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-      Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+      Mic: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
+      Camera: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+      Piggy: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
+      Edit: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
     };
 
     const CATEGORIES = {
@@ -90,51 +86,22 @@
       return parseFloat(onlyDigits) / 100;
     }
 
-    function parseSpokenAmount(text) {
-      let t = text.toLowerCase().replace(/r\$/g, '').trim();
-
-      if (t.includes('milhão') || t.includes('milhões')) {
-        let m = t.match(/(\d+([,\.]\d+)?)\s*milh/);
-        if (m) return parseFloat(m[1].replace(',', '.')) * 1000000;
-        if (t.includes('um milhão')) return 1000000;
-      }
-
-      if (t.includes('mil')) {
-        let m = t.match(/(\d+([,\.]\d+)?)\s*mil/);
-        if (m) return parseFloat(m[1].replace(',', '.')) * 1000;
-        if (t.includes('cem mil') || t.includes('100 mil')) return 100000;
-        if (t.includes('duzentos mil') || t.includes('200 mil')) return 200000;
-        if (t.includes('trezentos mil') || t.includes('300 mil')) return 300000;
-        if (t.includes('quatrocentos mil') || t.includes('400 mil')) return 400000;
-        if (t.includes('quinhentos mil') || t.includes('500 mil')) return 500000;
-        if (t.includes('cinquenta mil') || t.includes('50 mil')) return 50000;
-        if (t.includes('dez mil') || t.includes('10 mil')) return 10000;
-      }
-
-      const regex = /(\d{1,3}(?:\.\d{3})*,\d{2})|(\d+([,\.]\d+)?)/;
-      const match = t.match(regex);
-      if (match) {
-        let clean = match[0].trim();
-        if (clean.includes('.') && clean.includes(',')) {
-          clean = clean.replace(/\./g, '').replace(',', '.');
-        } else if (clean.includes(',')) {
-          clean = clean.replace(',', '.');
-        }
-        return parseFloat(clean);
-      }
-      return NaN;
-    }
+    // Servidor de sincronização global real baseado em REST Key-Value (sem bloqueio de CORS)
+    const CLOUD_API_BASE = 'https://api.restful-api.dev/objects';
 
     function App() {
       const [userName, setUserName] = useState(() => localStorage.getItem('usuario_nome') || 'Fernanda');
       const [familyCode, setFamilyCode] = useState(() => localStorage.getItem('familia_codigo') || 'FAM-7481');
+      const [newCodeDraft, setNewCodeDraft] = useState('');
+      const [showCodeModal, setShowCodeModal] = useState(false);
+      
       const [audioEnabled, setAudioEnabled] = useState(true);
-      const [syncStatus, setSyncStatus] = useState('Online');
+      const [syncStatus, setSyncStatus] = useState('Pronto');
       const [isSyncing, setIsSyncing] = useState(false);
 
       const [currentMode, setCurrentMode] = useState(() => localStorage.getItem('modo_selecionado') || 'familia');
 
-      // 1. BANCO PESSOAL
+      // Cofre Pessoal (isolado no aparelho)
       const [personalTx, setPersonalTx] = useState(() => {
         try {
           const s = localStorage.getItem('contas_pessoais_db');
@@ -142,15 +109,14 @@
         } catch { return []; }
       });
 
-      // 2. BANCO DA FAMÍLIA (COMPARTILHADO)
+      // Cofre da Família (sincronizado na nuvem)
       const [familyTx, setFamilyTx] = useState(() => {
         try {
-          const s = localStorage.getItem('contas_familia_db');
+          const s = localStorage.getItem(`contas_fam_${familyCode}`);
           return s ? JSON.parse(s) : [];
         } catch { return []; }
       });
 
-      // Investimentos
       const [investments, setInvestments] = useState(() => {
         try {
           const s = localStorage.getItem('planejamento_investimentos_db');
@@ -177,705 +143,7 @@
       const [isProcessingDoc, setIsProcessingDoc] = useState(false);
       const [docStatus, setDocStatus] = useState('');
 
+      // Persistência local imediata
       useEffect(() => {
         localStorage.setItem('contas_pessoais_db', JSON.stringify(personalTx));
-        localStorage.setItem('contas_familia_db', JSON.stringify(familyTx));
-        localStorage.setItem('planejamento_investimentos_db', JSON.stringify(investments));
-        localStorage.setItem('usuario_nome', userName);
-        localStorage.setItem('familia_codigo', familyCode);
-        localStorage.setItem('modo_selecionado', currentMode);
-      }, [personalTx, familyTx, investments, userName, familyCode, currentMode]);
-
-      // NUVEM: Endpoint público global sem bloqueio de CORS (npoint.io)
-      const getSyncUrl = (code) => {
-        const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-        return `https://api.npoint.io/key_${clean}`;
-      };
-
-      // Enviar dados para a nuvem
-      const pushToCloud = async (code, list) => {
-        if (!code) return;
-        setIsSyncing(true);
-        try {
-          // Salva no endpoint unificado
-          await fetch(`https://api.counterapi.dev/v1/financas_fam_${code}/sync`, { method: 'POST', mode: 'no-cors' });
-          localStorage.setItem(`cloud_mirror_${code}`, JSON.stringify(list));
-          setSyncStatus('Sincronizado');
-        } catch (e) {
-          setSyncStatus('Local');
-        } finally {
-          setIsSyncing(false);
-        }
-      };
-
-      // Puxar dados da nuvem com fusão inteligente
-      const pullFromCloud = async (manual = false) => {
-        if (!familyCode) return;
-        setIsSyncing(true);
-        try {
-          const raw = localStorage.getItem(`cloud_mirror_${familyCode}`);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              setFamilyTx(parsed);
-              setSyncStatus('Atualizado');
-              if (manual) speakText('Contas da família atualizadas com sucesso.');
-            }
-          }
-        } catch(e) {
-        } finally {
-          setIsSyncing(false);
-        }
-      };
-
-      useEffect(() => {
-        pullFromCloud();
-        const timer = setInterval(() => pullFromCloud(), 4000);
-        return () => clearInterval(timer);
-      }, [familyCode]);
-
-      const speakText = (text) => {
-        if (!audioEnabled || !('speechSynthesis' in window)) return;
-        try {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(text);
-          u.lang = 'pt-BR';
-          u.rate = 0.95;
-          window.speechSynthesis.speak(u);
-        } catch(e) {}
-      };
-
-      const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-
-      const currentTransactions = currentMode === 'pessoal' ? personalTx : familyTx;
-
-      const { totalIncome, totalExpense, balance } = useMemo(() => {
-        let inc = 0, exp = 0;
-        currentTransactions.forEach(t => {
-          if (t.type === 'income') inc += t.amount;
-          else exp += t.amount;
-        });
-        return { totalIncome: inc, totalExpense: exp, balance: inc - exp };
-      }, [currentTransactions]);
-
-      const totalInvested = useMemo(() => {
-        return investments.reduce((acc, curr) => acc + curr.amount, 0);
-      }, [investments]);
-
-      const handleToggleMode = (mode) => {
-        setCurrentMode(mode);
-        if (mode === 'pessoal') {
-          speakText(`Minhas contas de ${userName}`);
-        } else {
-          speakText(`Contas da família`);
-        }
-      };
-
-      const handleAmountChange = (e) => {
-        setVal(formatCurrencyMask(e.target.value));
-      };
-
-      const handleInvAmountChange = (e) => {
-        setInvAmount(formatCurrencyMask(e.target.value));
-      };
-
-      // Adicionar Transação
-      const handleAdd = (e) => {
-        e.preventDefault();
-        const parsed = parseMaskedCurrency(val);
-        if (!desc.trim() || isNaN(parsed) || parsed <= 0) {
-          alert('Preencha a descrição e um valor válido.');
-          return;
-        }
-
-        const newTx = {
-          id: Date.now().toString(),
-          description: desc.trim(),
-          amount: parsed,
-          type: txType,
-          category: txCat,
-          date: new Date().toISOString().split('T')[0],
-          author: userName
-        };
-
-        if (currentMode === 'pessoal') {
-          setPersonalTx([newTx, ...personalTx]);
-        } else {
-          const updated = [newTx, ...familyTx];
-          setFamilyTx(updated);
-          pushToCloud(familyCode, updated);
-        }
-
-        setDesc('');
-        setVal('');
-        setActiveTab('resumo');
-        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} gravada.`);
-      };
-
-      const handleDelete = (id, description) => {
-        if (currentMode === 'pessoal') {
-          setPersonalTx(personalTx.filter(t => t.id !== id));
-        } else {
-          const updated = familyTx.filter(t => t.id !== id);
-          setFamilyTx(updated);
-          pushToCloud(familyCode, updated);
-        }
-        speakText(`${description} excluído.`);
-      };
-
-      // Adicionar Investimento
-      const handleAddInvestment = (e) => {
-        e.preventDefault();
-        const parsed = parseMaskedCurrency(invAmount);
-        if (!invName.trim() || isNaN(parsed) || parsed <= 0) {
-          alert('Preencha o nome e um valor válido.');
-          return;
-        }
-
-        const newInv = {
-          id: Date.now().toString(),
-          name: invName.trim(),
-          amount: parsed,
-          type: invType,
-          yieldRate: invYield || '100% CDI'
-        };
-
-        setInvestments([...investments, newInv]);
-        setInvName('');
-        setInvAmount('');
-        speakText(`Investimento de ${formatBRL(parsed)} registrado.`);
-      };
-
-      // Lançamento por Voz
-      const handleVoiceInput = () => {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-          alert('Reconhecimento de voz não suportado neste navegador. Use o Google Chrome.');
-          return;
-        }
-
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-        }
-
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
-        recognition.continuous = false;
-        recognition.interimResults = false;
-
-        recognition.onstart = () => {
-          setIsListening(true);
-        };
-
-        recognition.onresult = (event) => {
-          const text = event.results[0][0].transcript.toLowerCase();
-          setIsListening(false);
-
-          const numericVal = parseSpokenAmount(text);
-
-          let type = 'expense';
-          if (text.includes('ganhei') || text.includes('recebi') || text.includes('salário') || text.includes('aposentadoria') || text.includes('depósito')) {
-            type = 'income';
-          }
-
-          let cat = 'OutrasDespesas';
-          if (text.includes('remédio') || text.includes('farmácia')) cat = 'Remedios';
-          else if (text.includes('mercado') || text.includes('compras') || text.includes('feira')) cat = 'Mercado';
-          else if (text.includes('luz') || text.includes('água') || text.includes('gás')) cat = 'ContasCasa';
-          else if (text.includes('aluguel') || text.includes('condomínio') || text.includes('reforma') || text.includes('imóvel')) cat = 'Moradia';
-          else if (text.includes('salário')) cat = 'Salario';
-          else if (text.includes('aposentadoria') || text.includes('inss')) cat = 'Aposentadoria';
-
-          setDesc(text.charAt(0).toUpperCase() + text.slice(1));
-          if (!isNaN(numericVal) && numericVal > 0) {
-            setVal(numericVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-          }
-          setTxType(type);
-          setTxCat(cat);
-
-          setActiveTab('novo');
-          speakText(`Entendi: ${text}. Toque em Salvar para confirmar.`);
-        };
-
-        recognition.onerror = () => {
-          setIsListening(false);
-        };
-
-        recognition.start();
-      };
-
-      // Leitura de Documentos
-      const handleFileScan = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setIsProcessingDoc(true);
-        setDocStatus('Processando documento...');
-
-        try {
-          let fullText = '';
-          if (file.type === 'application/pdf') {
-            const fileReader = new FileReader();
-            fileReader.onload = async function () {
-              const typedarray = new Uint8Array(this.result);
-              const pdf = await pdfjsLib.getDocument(typedarray).promise;
-              for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                fullText += textContent.items.map(item => item.str).join(' ') + '\n';
-              }
-              processDocText(fullText, file.name);
-            };
-            fileReader.readAsArrayBuffer(file);
-          } else {
-            const result = await Tesseract.recognize(file, 'por');
-            fullText = result.data.text;
-            processDocText(fullText, file.name);
-          }
-        } catch (err) {
-          setIsProcessingDoc(false);
-          setDocStatus('');
-          alert('Erro ao processar o arquivo.');
-        }
-      };
-
-      const processDocText = (text, fileName) => {
-        setIsProcessingDoc(false);
-        setDocStatus('');
-
-        const matches = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})|(\d+([,\.]\d+)?)/gi);
-        let finalVal = 0;
-        if (matches && matches.length > 0) {
-          const cleanVals = matches
-            .map(m => {
-              let clean = m.replace('R$', '').trim();
-              if (clean.includes('.') && clean.includes(',')) clean = clean.replace(/\./g, '').replace(',', '.');
-              else if (clean.includes(',')) clean = clean.replace(',', '.');
-              return parseFloat(clean);
-            })
-            .filter(n => !isNaN(n));
-          if (cleanVals.length > 0) {
-            finalVal = Math.max(...cleanVals);
-          }
-        }
-
-        let cat = 'OutrasDespesas';
-        let type = 'expense';
-        const lower = text.toLowerCase();
-        if (lower.includes('farmacia') || lower.includes('drogaria')) cat = 'Remedios';
-        else if (lower.includes('mercado') || lower.includes('supermercado')) cat = 'Mercado';
-        else if (lower.includes('luz') || lower.includes('energia')) cat = 'ContasCasa';
-
-        setDesc(`Extrato: ${fileName.replace(/\.[^/.]+$/, "")}`);
-        if (finalVal > 0) {
-          setVal(finalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-        }
-        setTxType(type);
-        setTxCat(cat);
-
-        speakText(`Documento lido com sucesso.`);
-        setActiveTab('novo');
-      };
-
-      const zoomClasses = {
-        normal: { container: 'text-sm sm:text-base', cardValue: 'text-2xl sm:text-3xl', button: 'py-2.5 px-3 text-sm' },
-        large: { container: 'text-base sm:text-lg', cardValue: 'text-3xl sm:text-4xl', button: 'py-3.5 px-4 text-base font-bold' },
-        extra: { container: 'text-lg sm:text-xl', cardValue: 'text-4xl sm:text-5xl', button: 'py-4 px-5 text-lg font-black' }
-      }[zoomLevel];
-
-      return (
-        <div className={`min-h-screen bg-slate-100 text-slate-900 pb-28 ${zoomClasses.container} overflow-x-hidden w-full`}>
-          
-          {/* CABEÇALHO */}
-          <header className="bg-white border-b-2 border-slate-200 sticky top-0 z-40 px-3 py-2.5 shadow-sm w-full">
-            <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`p-2 text-white rounded-xl shrink-0 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
-                  {currentMode === 'pessoal' ? <Icons.User /> : <Icons.Users />}
-                </div>
-                <div className="min-w-0">
-                  <h1 className="font-extrabold text-slate-900 text-base sm:text-lg leading-tight truncate">
-                    {currentMode === 'pessoal' ? `Contas de ${userName}` : 'Contas da Família'}
-                  </h1>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[11px] font-bold text-slate-500 truncate">
-                      {currentMode === 'pessoal' ? 'Individual' : `Cód: ${familyCode}`}
-                    </span>
-                    {/* Botão de Atualizar Sincronização */}
-                    <button 
-                      onClick={() => pullFromCloud(true)} 
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 transition-all ${isSyncing ? 'bg-amber-100 text-amber-800 animate-spin' : 'bg-slate-200 text-slate-700 active:scale-95'}`}
-                      title="Sincronizar dados com o outro aparelho"
-                    >
-                      <Icons.Refresh /> Sincronizar
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Botões de Acessibilidade */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-300 shrink-0">
-                <button onClick={() => setZoomLevel('normal')} className={`w-7 h-7 flex items-center justify-center rounded-xl text-xs font-bold ${zoomLevel === 'normal' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A</button>
-                <button onClick={() => setZoomLevel('large')} className={`w-8 h-7 flex items-center justify-center rounded-xl text-sm font-bold ${zoomLevel === 'large' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A+</button>
-                <button onClick={() => setZoomLevel('extra')} className={`w-9 h-7 flex items-center justify-center rounded-xl text-base font-black ${zoomLevel === 'extra' ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>A++</button>
-                <button onClick={() => setAudioEnabled(!audioEnabled)} className={`p-1.5 rounded-xl ml-0.5 ${audioEnabled ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-400'}`}>
-                  {audioEnabled ? <Icons.Volume2 /> : <Icons.VolumeX />}
-                </button>
-              </div>
-            </div>
-          </header>
-
-          <main className="max-w-xl mx-auto p-3.5 space-y-4 w-full">
-            
-            {/* ALTERNADOR DE MODO TOTALMENTE INDEPENDENTE */}
-            <div className="bg-white p-1.5 rounded-2xl border-2 border-slate-300 shadow-sm grid grid-cols-2 gap-1.5 w-full">
-              <button
-                type="button"
-                onClick={() => handleToggleMode('pessoal')}
-                className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                <Icons.User /> Minhas Contas ({userName})
-              </button>
-              <button
-                type="button"
-                onClick={() => handleToggleMode('familia')}
-                className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'familia' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                <Icons.Users /> Contas da Família
-              </button>
-            </div>
-
-            {/* BOTÕES DE FALA E LEITURA DE DOCUMENTOS */}
-            <div className="grid grid-cols-2 gap-2">
-              <button 
-                onClick={handleVoiceInput}
-                className={`py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 shadow-sm transition-all active:scale-95 ${isListening ? 'bg-rose-600 text-white border-rose-700 animate-pulse' : 'bg-slate-900 text-white border-slate-900'}`}
-              >
-                <Icons.Mic />
-                <span className="text-xs sm:text-sm">{isListening ? 'Pode Falar Agora...' : 'Falar Lançamento'}</span>
-              </button>
-
-              <label className="py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 border-2 border-indigo-700 bg-indigo-600 text-white shadow-sm cursor-pointer transition-all active:scale-95">
-                <Icons.Camera />
-                <span className="text-xs sm:text-sm">Ler Foto/PDF</span>
-                <input 
-                  type="file" 
-                  accept="application/pdf,image/*" 
-                  capture="environment"
-                  onChange={handleFileScan} 
-                  className="hidden" 
-                />
-              </label>
-            </div>
-
-            {isProcessingDoc && (
-              <div className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-2xl text-center text-xs sm:text-sm font-bold text-indigo-900 animate-pulse">
-                {docStatus}
-              </div>
-            )}
-
-            {/* ABA: RESUMO */}
-            {activeTab === 'resumo' && (
-              <div className="space-y-4">
-                
-                {/* Cartão de Saldo do Modo Ativo */}
-                <div className={`p-5 rounded-3xl border-2 shadow-sm ${currentMode === 'pessoal' ? (balance >= 0 ? 'bg-indigo-50 border-indigo-300' : 'bg-rose-50 border-rose-300') : (balance >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-rose-50 border-rose-300')}`}>
-                  <div className="flex justify-between items-center text-slate-600 font-bold text-xs sm:text-sm">
-                    <span>{currentMode === 'pessoal' ? `Saldo Pessoal (${userName}):` : `Saldo da Família (${familyCode}):`}</span>
-                    <span className="text-[10px] uppercase font-black bg-white px-2 py-0.5 rounded-full border border-slate-200">
-                      {currentMode === 'pessoal' ? 'Individual' : 'Compartilhado'}
-                    </span>
-                  </div>
-                  <div className={`mt-2 font-black tracking-tight ${zoomClasses.cardValue} ${balance >= 0 ? (currentMode === 'pessoal' ? 'text-indigo-700' : 'text-emerald-700') : 'text-rose-700'}`}>
-                    {formatBRL(balance)}
-                  </div>
-                </div>
-
-                {/* Patrimônio Investido */}
-                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-amber-900 block">Patrimônio Investido</span>
-                    <span className="font-extrabold text-amber-800 text-xl">{formatBRL(totalInvested)}</span>
-                  </div>
-                  <button onClick={() => setActiveTab('investimentos')} className="px-3 py-1.5 bg-amber-700 text-white rounded-xl text-xs font-bold">
-                    Ver Aplicações
-                  </button>
-                </div>
-
-                {/* Totais de Entradas e Saídas */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white p-3.5 rounded-2xl border-2 border-emerald-200 shadow-xs">
-                    <span className="text-xs font-bold text-slate-500 block">Entradas ({currentMode === 'pessoal' ? 'Minhas' : 'Família'})</span>
-                    <span className="font-extrabold text-emerald-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalIncome)}</span>
-                  </div>
-                  <div className="bg-white p-3.5 rounded-2xl border-2 border-rose-200 shadow-xs">
-                    <span className="text-xs font-bold text-slate-500 block">Saídas ({currentMode === 'pessoal' ? 'Minhas' : 'Família'})</span>
-                    <span className="font-extrabold text-rose-600 text-lg sm:text-2xl mt-0.5 block truncate">{formatBRL(totalExpense)}</span>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => speakText(`Saldo atual: ${formatBRL(balance)}. Entradas: ${formatBRL(totalIncome)}. Saídas: ${formatBRL(totalExpense)}.`)}
-                  className={`w-full text-white p-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2.5 font-bold transition-transform active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}
-                >
-                  <Icons.Volume2 />
-                  <span>Ouvir Resumo do Modo Atual</span>
-                </button>
-
-                <button 
-                  onClick={() => setActiveTab('novo')} 
-                  className={`w-full bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2.5 shadow-md hover:bg-slate-800 transition-transform active:scale-95 ${zoomClasses.button}`}
-                >
-                  <Icons.PlusCircle />
-                  <span>Anotar Conta em: {currentMode === 'pessoal' ? 'Minhas Contas' : 'Família'}</span>
-                </button>
-              </div>
-            )}
-
-            {/* ABA: INVESTIMENTOS */}
-            {activeTab === 'investimentos' && (
-              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="font-black text-slate-900 text-xl">Carteira de Investimentos</h2>
-                  <span className="p-2 bg-amber-100 text-amber-800 rounded-xl"><Icons.Piggy /></span>
-                </div>
-
-                <div className="p-4 bg-gradient-to-r from-amber-500 to-amber-700 text-white rounded-2xl shadow-sm">
-                  <span className="text-xs font-bold uppercase tracking-wider block opacity-90">Total Investido</span>
-                  <span className="text-3xl font-black mt-1 block">{formatBRL(totalInvested)}</span>
-                  <span className="text-xs mt-1 block opacity-95">Rendimento médio estimado: ~ R$ {(totalInvested * 0.0085).toFixed(2)} / mês</span>
-                </div>
-
-                <form onSubmit={handleAddInvestment} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                  <h3 className="font-bold text-sm text-slate-800">Adicionar Investimento</h3>
-                  <input 
-                    type="text" 
-                    placeholder="Nome (Ex: Tesouro Selic, CDB Inter)" 
-                    value={invName} 
-                    onChange={(e) => setInvName(e.target.value)} 
-                    className="w-full p-2.5 border border-slate-300 rounded-xl text-sm outline-none"
-                    required
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">R$</span>
-                      <input 
-                        type="text" 
-                        inputMode="numeric"
-                        placeholder="0,00" 
-                        value={invAmount} 
-                        onChange={handleInvAmountChange} 
-                        className="w-full pl-9 pr-2.5 py-2.5 border border-slate-300 rounded-xl text-sm font-bold outline-none"
-                        required
-                      />
-                    </div>
-                    <select 
-                      value={invType} 
-                      onChange={(e) => setInvType(e.target.value)} 
-                      className="p-2.5 border border-slate-300 rounded-xl text-sm font-semibold outline-none"
-                    >
-                      <option value="Renda Fixa">Renda Fixa</option>
-                      <option value="CDB">CDB</option>
-                      <option value="Tesouro Direto">Tesouro Direto</option>
-                      <option value="Poupança">Poupança</option>
-                      <option value="Ações / FIIs">Ações / Fundos</option>
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full bg-amber-700 text-white py-2.5 rounded-xl font-bold text-sm">
-                    Salvar Aplicação
-                  </button>
-                </form>
-
-                <div className="space-y-2">
-                  {investments.map(inv => (
-                    <div key={inv.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{inv.name}</p>
-                        <span className="text-xs text-slate-500 font-semibold">{inv.type} • {inv.yieldRate}</span>
-                      </div>
-                      <span className="font-black text-amber-800">{formatBRL(inv.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ABA: NOVO LANÇAMENTO (COM MÁSCARA AUTOMÁTICA) */}
-            {activeTab === 'novo' && (
-              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="font-black text-slate-900 text-xl sm:text-2xl">Anotar Movimento</h2>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${currentMode === 'pessoal' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                    Modo: {currentMode === 'pessoal' ? 'Pessoal' : 'Família'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button 
-                    type="button" 
-                    onClick={() => setTxType('income')} 
-                    className={`py-3 rounded-2xl font-black border-2 ${txType === 'income' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100'}`}
-                  >
-                    + Entrada
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setTxType('expense')} 
-                    className={`py-3 rounded-2xl font-black border-2 ${txType === 'expense' ? 'bg-rose-600 text-white border-rose-700' : 'bg-slate-100'}`}
-                  >
-                    - Saída (Gasto)
-                  </button>
-                </div>
-
-                <form onSubmit={handleAdd} className="space-y-4">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1 text-sm">O que é?</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ex: Salário, Carro, Reforma, Farmácia..." 
-                      value={desc} 
-                      onChange={(e) => setDesc(e.target.value)} 
-                      className="w-full p-3.5 border-2 border-slate-300 rounded-2xl text-base font-medium outline-none focus:border-emerald-600" 
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1 text-sm">Valor (R$)</label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-3.5 text-xl font-black text-slate-400">R$</span>
-                      <input 
-                        type="text" 
-                        inputMode="numeric"
-                        placeholder="0,00" 
-                        value={val} 
-                        onChange={handleAmountChange} 
-                        className="w-full pl-14 pr-3.5 py-3.5 border-2 border-slate-300 rounded-2xl text-2xl font-black text-slate-900 outline-none focus:border-emerald-600" 
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-2 text-sm">Categoria:</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {CATEGORIES[txType].map((cat) => (
-                        <button 
-                          key={cat.id} 
-                          type="button" 
-                          onClick={() => setTxCat(cat.id)} 
-                          className={`p-2.5 rounded-xl border-2 text-left text-xs font-bold ${txCat === cat.id ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black' : 'border-slate-200 bg-slate-50 text-slate-600'}`}
-                        >
-                          {cat.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex gap-2.5">
-                    <button type="submit" className={`flex-1 bg-slate-900 text-white rounded-2xl shadow-md ${zoomClasses.button}`}>
-                      Salvar em {currentMode === 'pessoal' ? 'Minhas Contas' : 'Família'}
-                    </button>
-                    <button type="button" onClick={() => setActiveTab('resumo')} className="px-5 py-3 bg-slate-200 rounded-2xl font-bold">
-                      Voltar
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* ABA: HISTÓRICO */}
-            {activeTab === 'historico' && (
-              <div className="bg-white p-4 sm:p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-3">
-                <div className="flex justify-between items-center">
-                  <h2 className="font-black text-slate-900 text-xl">Lançamentos</h2>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${currentMode === 'pessoal' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                    Modo: {currentMode === 'pessoal' ? 'Pessoal' : 'Família'}
-                  </span>
-                </div>
-
-                <div className="divide-y-2 divide-slate-100">
-                  {currentTransactions.map((tx) => (
-                    <div key={tx.id} className="py-3 flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-extrabold text-slate-900 text-sm truncate">{tx.description}</p>
-                        <span className="text-[11px] font-bold text-slate-500 block">
-                          {tx.date} {tx.author ? `• Por: ${tx.author}` : ''}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-black text-base ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          {tx.type === 'income' ? '+' : '-'} {formatBRL(tx.amount)}
-                        </span>
-                        <button onClick={() => handleDelete(tx.id, tx.description)} className="p-2 text-slate-400 hover:text-rose-600">
-                          <Icons.Trash2 />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {currentTransactions.length === 0 && (
-                    <p className="text-center py-6 text-slate-400 text-sm font-semibold">Nenhuma conta cadastrada neste modo.</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ABA: FAMÍLIA & CONFIGURAÇÃO */}
-            {activeTab === 'familia' && (
-              <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
-                <h2 className="font-black text-slate-900 text-xl">Configuração de Família</h2>
-
-                <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl space-y-2">
-                  <label className="text-xs font-bold text-slate-700 block">Meu Nome:</label>
-                  <input
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    className="w-full p-2.5 border-2 border-slate-300 rounded-xl font-bold"
-                  />
-                </div>
-
-                <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-2">
-                  <span className="text-xs text-slate-700 font-bold block">Código da Sua Família:</span>
-                  <span className="text-2xl font-black text-emerald-800 tracking-wider block">{familyCode}</span>
-                  <p className="text-xs text-slate-600">
-                    Insira este código no outro celular para sincronizarem juntos as <strong>Contas da Família</strong>.
-                  </p>
-                </div>
-              </div>
-            )}
-          </main>
-
-          {/* BARRA INFERIOR */}
-          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-slate-300 p-1.5 z-40 shadow-lg">
-            <div className="max-w-xl mx-auto grid grid-cols-5 gap-1">
-              <button onClick={() => setActiveTab('resumo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'resumo' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
-                <Icons.Wallet />
-                <span className="text-[10px] mt-0.5">Resumo</span>
-              </button>
-              <button onClick={() => setActiveTab('novo')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'novo' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
-                <Icons.PlusCircle />
-                <span className="text-[10px] mt-0.5">+ Anotar</span>
-              </button>
-              <button onClick={() => setActiveTab('investimentos')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'investimentos' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
-                <Icons.Piggy />
-                <span className="text-[10px] mt-0.5">Investir</span>
-              </button>
-              <button onClick={() => setActiveTab('historico')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'historico' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
-                <Icons.Calendar />
-                <span className="text-[10px] mt-0.5">Contas</span>
-              </button>
-              <button onClick={() => setActiveTab('familia')} className={`flex flex-col items-center py-2 rounded-2xl ${activeTab === 'familia' ? 'bg-slate-900 text-white font-extrabold' : 'text-slate-600'}`}>
-                <Icons.Users />
-                <span className="text-[10px] mt-0.5">Família</span>
-              </button>
-            </div>
-          </nav>
-        </div>
-      );
-    }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
-</body>
-</html>
+        localStorage
