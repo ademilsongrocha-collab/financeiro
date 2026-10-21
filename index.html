@@ -27,16 +27,16 @@
 <body class="bg-slate-100 text-slate-900">
   <div id="root">
     <div style="padding: 24px; text-align: center; font-weight: bold; color: #475569;">
-      Carregando v2.7.0...
+      Carregando v2.8.0...
     </div>
   </div>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
-    const APP_VERSION = "v2.7.0 (Painel Fixo de Segurança & PIN)";
+    const APP_VERSION = "v2.8.0 (Sincronização Atômica Supabase)";
 
-    // Chaves do seu Supabase
+    // CONFIGURAÇÃO DO SUPABASE: Substitua pelas suas credenciais
     const SUPABASE_URL = "https://rvqjcfeyvwhjkmzlsfqq.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2cWpjZmV5dndoamttemxzZnFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDk4NTYwMDAsImV4cCI6MjAyNTQzMjAwMH0.P8B7Wd2hO7Kx0V4T7_sJ4YxU0P-W_7Y8J7N1Q9X5Z3Y";
     
@@ -46,7 +46,7 @@
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
     } catch (e) {
-      console.error("Falha Supabase:", e);
+      console.error("Erro ao inicializar Supabase:", e);
     }
 
     if (window.pdfjsLib) {
@@ -133,7 +133,6 @@
       });
       const [deviceStatus, setDeviceStatus] = useState(() => localStorage.getItem(`status_dev_${familyCode}`) || 'APPROVED');
 
-      // Membros Conectados e Pendentes
       const [pendingRequests, setPendingRequests] = useState([]);
       const [approvedDevices, setApprovedDevices] = useState(() => [
         { id: myDeviceId, name: userName, role: 'TITULAR' }
@@ -143,7 +142,7 @@
       const [joinPinInput, setJoinPinInput] = useState('');
 
       const [audioEnabled, setAudioEnabled] = useState(true);
-      const [syncStatus, setSyncStatus] = useState('Nuvem Supabase');
+      const [syncStatus, setSyncStatus] = useState('Online');
       const [isSyncing, setIsSyncing] = useState(false);
 
       const [currentMode, setCurrentMode] = useState('familia');
@@ -188,7 +187,7 @@
       const [isProcessingDoc, setIsProcessingDoc] = useState(false);
       const [docStatus, setDocStatus] = useState('');
 
-      // Sincronização Local de Segurança
+      // Persistência local contínua
       useEffect(() => {
         try {
           localStorage.setItem('contas_pessoais_db', JSON.stringify(personalTx));
@@ -202,24 +201,52 @@
         } catch (e) {}
       }, [personalTx, familyTx, investments, userName, familyCode, familyPin, isOwner, deviceStatus]);
 
-      // ENVIO SUPABASE
-      const pushToSupabase = async (code, list, invList, pending = pendingRequests, approved = approvedDevices, pin = familyPin) => {
+      // GRAVAÇÃO ATÔMICA NO SUPABASE (Com fusão inteligente de dados)
+      const pushToSupabase = async (code, list, invList, pending = pendingRequests, approved = approvedDevices) => {
         if (!code || !supabase) return;
         setIsSyncing(true);
         try {
           const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          
+          // Primeiro lê para não sobrescrever dados adicionados pelo outro celular
+          const { data: remoteData } = await supabase
+            .from('family_data')
+            .select('*')
+            .eq('family_code', clean)
+            .single();
+
+          let mergedTx = list;
+          let mergedInv = invList;
+
+          if (remoteData) {
+            const remoteTx = Array.isArray(remoteData.transactions) ? remoteData.transactions : [];
+            const txMap = new Map();
+            remoteTx.forEach(t => txMap.set(t.id, t));
+            list.forEach(t => txMap.set(t.id, t));
+            mergedTx = Array.from(txMap.values());
+
+            const remoteInv = Array.isArray(remoteData.investments) ? remoteData.investments : [];
+            const invMap = new Map();
+            remoteInv.forEach(i => invMap.set(i.id, i));
+            invList.forEach(i => invMap.set(i.id, i));
+            mergedInv = Array.from(invMap.values());
+          }
+
           const { error } = await supabase
             .from('family_data')
             .upsert({
               family_code: clean,
-              transactions: list,
-              investments: invList,
+              transactions: mergedTx,
+              investments: mergedInv,
               pending: pending,
               approved: approved,
               updated_at: new Date().toISOString()
             });
 
           if (error) throw error;
+          
+          setFamilyTx(mergedTx);
+          setInvestments(mergedInv);
           setSyncStatus('Sincronizado');
         } catch (e) {
           console.warn("Aviso de sincronização:", e);
@@ -229,7 +256,7 @@
         }
       };
 
-      // LEITURA SUPABASE
+      // LEITURA ATÔMICA DO SUPABASE
       const pullFromSupabase = async (code, notify = false) => {
         const target = code || familyCode;
         if (!target || !supabase) return;
@@ -243,11 +270,13 @@
             .single();
 
           if (data) {
-            if (Array.isArray(data.transactions) && (isOwner || deviceStatus === 'APPROVED')) {
+            if (Array.isArray(data.transactions)) {
               setFamilyTx(data.transactions);
+              localStorage.setItem(`contas_fam_${clean}`, JSON.stringify(data.transactions));
             }
             if (Array.isArray(data.investments)) {
               setInvestments(data.investments);
+              localStorage.setItem('planejamento_investimentos_db', JSON.stringify(data.investments));
             }
             if (Array.isArray(data.pending)) {
               setPendingRequests(data.pending);
@@ -256,25 +285,27 @@
               setApprovedDevices(data.approved);
               if (data.approved.some(d => d.id === myDeviceId)) {
                 setDeviceStatus('APPROVED');
-                localStorage.setItem(`status_dev_${target}`, 'APPROVED');
+                localStorage.setItem(`status_dev_${clean}`, 'APPROVED');
               }
             }
-            setSyncStatus('Online');
-            if (notify) speakText('Dados da família sincronizados.');
+            setSyncStatus('Conectado');
+            if (notify) speakText('Contas da família carregadas!');
           }
         } catch (e) {
+          console.warn("Erro ao buscar dados:", e);
         } finally {
           setIsSyncing(false);
         }
       };
 
+      // Loop de sincronização em tempo real (a cada 2 segundos)
       useEffect(() => {
         pullFromSupabase(familyCode);
         const timer = setInterval(() => pullFromSupabase(familyCode), 2000);
         return () => clearInterval(timer);
       }, [familyCode, isOwner, deviceStatus]);
 
-      // ENTRAR NA FAMÍLIA COM PIN OU SOLICITAÇÃO
+      // CONECTAR À FAMÍLIA COM PIN OU SOLICITAÇÃO (Sem sobrescrever dados do banco)
       const handleJoinWithPin = async (e) => {
         e.preventDefault();
         const codeClean = joinCodeInput.trim().toUpperCase();
@@ -285,38 +316,85 @@
           return;
         }
 
-        // Se digitou o PIN 1234 (ou o PIN da família), aprova na hora
-        if (pinClean === '1234' || pinClean === familyPin) {
-          setFamilyCode(codeClean);
-          setIsOwner(false);
-          setDeviceStatus('APPROVED');
+        setIsSyncing(true);
+        setSyncStatus('Conectando...');
 
-          const newMember = { id: myDeviceId, name: userName, role: 'MEMBRO' };
-          const updatedApproved = [...approvedDevices.filter(d => d.id !== myDeviceId), newMember];
-          setApprovedDevices(updatedApproved);
+        try {
+          // Busca os dados da família primeiro
+          const { data: remoteData } = await supabase
+            .from('family_data')
+            .select('*')
+            .eq('family_code', codeClean)
+            .single();
 
-          await pushToSupabase(codeClean, familyTx, investments, pendingRequests, updatedApproved);
-          pullFromSupabase(codeClean, true);
-          alert(`Conectado com sucesso à família ${codeClean}!`);
-          setJoinCodeInput('');
-          setJoinPinInput('');
-          return;
+          if (pinClean === '1234' || pinClean === familyPin) {
+            setFamilyCode(codeClean);
+            setIsOwner(false);
+            setDeviceStatus('APPROVED');
+
+            let currentApproved = [];
+            let currentTx = [];
+            let currentInv = [];
+
+            if (remoteData) {
+              currentApproved = Array.isArray(remoteData.approved) ? remoteData.approved : [];
+              currentTx = Array.isArray(remoteData.transactions) ? remoteData.transactions : [];
+              currentInv = Array.isArray(remoteData.investments) ? remoteData.investments : [];
+            }
+
+            const newMember = { id: myDeviceId, name: userName, role: 'MEMBRO' };
+            const updatedApproved = [...currentApproved.filter(d => d.id !== myDeviceId), newMember];
+
+            // Atualiza a tela com o extrato já existente da família
+            setFamilyTx(currentTx);
+            setInvestments(currentInv);
+            setApprovedDevices(updatedApproved);
+
+            await supabase
+              .from('family_data')
+              .upsert({
+                family_code: codeClean,
+                transactions: currentTx,
+                investments: currentInv,
+                pending: remoteData ? (remoteData.pending || []) : [],
+                approved: updatedApproved,
+                updated_at: new Date().toISOString()
+              });
+
+            alert(`Conectado à família ${codeClean}!\nOs lançamentos foram carregados no seu aparelho.`);
+            setJoinCodeInput('');
+            setJoinPinInput('');
+            pullFromSupabase(codeClean, true);
+          } else {
+            // Solicitação pendente para aprovação do titular
+            setFamilyCode(codeClean);
+            setIsOwner(false);
+            setDeviceStatus('PENDING');
+
+            const newReq = { id: myDeviceId, name: userName, date: new Date().toLocaleTimeString('pt-BR') };
+            const currentPending = remoteData && Array.isArray(remoteData.pending) ? remoteData.pending : [];
+            const updatedPending = [...currentPending.filter(p => p.id !== myDeviceId), newReq];
+
+            await supabase
+              .from('family_data')
+              .upsert({
+                family_code: codeClean,
+                transactions: remoteData ? (remoteData.transactions || []) : [],
+                investments: remoteData ? (remoteData.investments || []) : [],
+                pending: updatedPending,
+                approved: remoteData ? (remoteData.approved || []) : [],
+                updated_at: new Date().toISOString()
+              });
+
+            alert(`Solicitação enviada para a família ${codeClean}!\nO titular pode aprovar na tela dele.`);
+          }
+        } catch (err) {
+          alert('Erro ao conectar à família. Verifique a sua conexão com o banco.');
+        } finally {
+          setIsSyncing(false);
         }
-
-        // Se não tiver o PIN, envia a solicitação para a lista do Titular
-        setFamilyCode(codeClean);
-        setIsOwner(false);
-        setDeviceStatus('PENDING');
-
-        const newReq = { id: myDeviceId, name: userName, date: new Date().toLocaleTimeString('pt-BR') };
-        const updatedPending = [...pendingRequests.filter(p => p.id !== myDeviceId), newReq];
-        setPendingRequests(updatedPending);
-
-        await pushToSupabase(codeClean, familyTx, investments, updatedPending, approvedDevices);
-        alert(`Solicitação enviada para a família ${codeClean}! O Titular pode aprovar na tela dele.`);
       };
 
-      // TITULAR APROVA ENTRADA
       const handleApproveDevice = async (req) => {
         const updatedPending = pendingRequests.filter(p => p.id !== req.id);
         const updatedApproved = [...approvedDevices.filter(d => d.id !== req.id), { id: req.id, name: req.name, role: 'MEMBRO' }];
@@ -326,7 +404,6 @@
         speakText(`Acesso aprovado para ${req.name}`);
       };
 
-      // TITULAR RECUSA
       const handleRejectDevice = async (req) => {
         const updatedPending = pendingRequests.filter(p => p.id !== req.id);
         setPendingRequests(updatedPending);
@@ -370,7 +447,7 @@
         }
 
         const newTx = {
-          id: 'tx_' + Date.now(),
+          id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
           description: desc.trim(),
           amount: parsed,
           type: txType,
@@ -390,7 +467,7 @@
         setDesc('');
         setVal('');
         setActiveTab('resumo');
-        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} adicionada.`);
+        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} adicionada.`);
       };
 
       const handleDelete = (id, description) => {
@@ -413,7 +490,7 @@
         }
 
         const newInv = {
-          id: 'inv_' + Date.now(),
+          id: 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
           name: invName.trim(),
           amount: parsed,
           type: invType,
@@ -556,9 +633,13 @@
                       <span className="text-[11px] font-black text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-md truncate">
                         Cód: {familyCode}
                       </span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${isOwner ? 'bg-purple-100 text-purple-800' : (deviceStatus === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}`}>
-                        {isOwner ? 'Titular' : (deviceStatus === 'APPROVED' ? 'Membro' : 'Pendente')}
-                      </span>
+                      <button 
+                        onClick={() => pullFromSupabase(familyCode, true)}
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 flex items-center gap-1 active:scale-95"
+                        title="Atualizar"
+                      >
+                        <Icons.Refresh /> {syncStatus}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -867,15 +948,15 @@
                 </div>
               )}
 
-              {/* ABA: CONFIGURAÇÃO DE FAMÍLIA (PAINEL FIXO E PERMANENTE DE SEGURANÇA) */}
+              {/* ABA: FAMÍLIA COM CONEXÃO DIRETA E LISTA DE MEMBROS */}
               {activeTab === 'familia' && (
                 <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-5">
                   <div>
                     <h2 className="font-black text-slate-900 text-xl">Gestão da Família & Segurança</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">Controle de aparelhos conectados e entrada na família.</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Sincronização em tempo real entre celulares.</p>
                   </div>
 
-                  {/* Perfil */}
+                  {/* Nome do Usuário */}
                   <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl space-y-2">
                     <label className="text-xs font-bold text-slate-700 block">Meu Nome de Usuário:</label>
                     <div className="flex gap-2">
@@ -894,84 +975,24 @@
                     </div>
                   </div>
 
-                  {/* PAINEL FIXO: CÓDIGO DA FAMÍLIA E SENHA PIN */}
+                  {/* DADOS DA FAMÍLIA ATUAL */}
                   <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">Código da Família Atual</span>
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isOwner ? 'bg-purple-200 text-purple-900' : 'bg-green-200 text-green-900'}`}>
-                        {isOwner ? 'Você é o Titular' : 'Você é Membro'}
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
+                        Ativa na Nuvem
                       </span>
                     </div>
                     <div className="text-3xl font-black text-emerald-800 tracking-wider py-1 font-mono flex items-center justify-between">
                       <span>{familyCode}</span>
-                      <span className="text-xs font-normal text-emerald-700 font-sans">Senha PIN: <strong>{familyPin}</strong></span>
+                      <span className="text-xs font-normal text-emerald-700 font-sans">PIN: <strong>{familyPin}</strong></span>
                     </div>
                     <p className="text-[11px] text-emerald-800 leading-tight">
-                      Para conectar outro celular de forma rápida e segura, basta digitar este código e a <strong>Senha PIN: {familyPin}</strong>.
+                      No outro celular, digite o código <strong>{familyCode}</strong> e o <strong>PIN {familyPin}</strong> para carregar todas as contas imediatamente.
                     </p>
                   </div>
 
-                  {/* PAINEL FIXO DE SEGURANÇA: DISPOSITIVOS APROVADOS E PENDENTES */}
-                  <div className="p-4 bg-purple-50 border-2 border-purple-300 rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-purple-950 font-black text-sm">
-                        <Icons.ShieldCheck />
-                        <span>Painel de Segurança da Família</span>
-                      </div>
-                      <span className="text-[10px] bg-purple-200 text-purple-900 font-bold px-2 py-0.5 rounded-full">
-                        {approvedDevices.length} Conectado(s)
-                      </span>
-                    </div>
-
-                    {/* Lista de Aparelhos Aprovados */}
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-bold text-purple-900 block">Aparelhos com Acesso Liberado:</span>
-                      {approvedDevices.map(d => (
-                        <div key={d.id} className="bg-white p-2.5 rounded-xl border border-purple-200 flex justify-between items-center text-xs">
-                          <span className="font-bold text-slate-800">{d.name} {d.id === myDeviceId ? '(Este Aparelho)' : ''}</span>
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-md">
-                            {d.role || 'MEMBRO'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Lista de Pedidos Pendentes de Aprovação */}
-                    {pendingRequests.length > 0 && (
-                      <div className="space-y-1.5 pt-2 border-t border-purple-200">
-                        <span className="text-[11px] font-bold text-rose-800 block animate-pulse">
-                          Aguardando sua aprovação ({pendingRequests.length}):
-                        </span>
-                        {pendingRequests.map(req => (
-                          <div key={req.id} className="bg-white p-2.5 rounded-xl border border-rose-300 flex justify-between items-center text-xs">
-                            <div>
-                              <span className="font-black text-slate-900 block">{req.name}</span>
-                              <span className="text-[10px] text-slate-400">Às {req.date}</span>
-                            </div>
-                            <div className="flex gap-1.5">
-                              <button 
-                                onClick={() => handleApproveDevice(req)}
-                                className="px-3 py-1 bg-emerald-600 text-white font-bold rounded-lg text-xs"
-                              >
-                                Aprovar
-                              </button>
-                              <button 
-                                onClick={() => handleRejectDevice(req)}
-                                className="px-2 py-1 bg-rose-100 text-rose-800 font-bold rounded-lg text-xs"
-                              >
-                                Recusar
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {pendingRequests.length === 0 && (
-                      <p className="text-[10px] text-purple-700 italic">Nenhum pedido pendente no momento.</p>
-                    )}
-                  </div>
-
-                  {/* FORMULÁRIO PARA OUTRO CELULAR ENTRAR NA FAMÍLIA COM CÓDIGO E PIN */}
+                  {/* FORMULÁRIO DE ENTRADA NO OUTRO CELULAR */}
                   <form onSubmit={handleJoinWithPin} className="p-4 bg-blue-50 border-2 border-blue-300 rounded-2xl space-y-3">
                     <h3 className="font-extrabold text-blue-950 text-sm flex items-center gap-1.5">
                       <Icons.Lock /> Conectar a Outro Aparelho (Código + PIN)
@@ -991,23 +1012,69 @@
                         value={joinPinInput}
                         onChange={(e) => setJoinPinInput(e.target.value)}
                         className="p-2.5 border-2 border-blue-300 bg-white rounded-xl font-mono font-bold text-xs outline-none"
+                        required
                       />
                     </div>
                     <button
                       type="submit"
                       className="w-full py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs active:scale-95 shadow-sm"
                     >
-                      Conectar à Família Agora
+                      Conectar e Carregar Contas
                     </button>
-                    <span className="text-[10px] text-blue-700 block">
-                      * Digitando a senha PIN da família, você entra imediatamente sem precisar esperar aprovação manual.
-                    </span>
                   </form>
+
+                  {/* PAINEL DE DISPOSITIVOS CONECTADOS */}
+                  <div className="p-4 bg-purple-50 border-2 border-purple-300 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-purple-950 font-black text-sm">
+                        <Icons.ShieldCheck />
+                        <span>Membros Conectados ({approvedDevices.length})</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {approvedDevices.map(d => (
+                        <div key={d.id} className="bg-white p-2.5 rounded-xl border border-purple-200 flex justify-between items-center text-xs">
+                          <span className="font-bold text-slate-800">{d.name} {d.id === myDeviceId ? '(Este Aparelho)' : ''}</span>
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-md">
+                            {d.role || 'MEMBRO'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {pendingRequests.length > 0 && (
+                      <div className="space-y-1.5 pt-2 border-t border-purple-200">
+                        <span className="text-[11px] font-bold text-rose-800 block">
+                          Aguardando aprovação ({pendingRequests.length}):
+                        </span>
+                        {pendingRequests.map(req => (
+                          <div key={req.id} className="bg-white p-2.5 rounded-xl border border-rose-300 flex justify-between items-center text-xs">
+                            <span className="font-black text-slate-900">{req.name}</span>
+                            <div className="flex gap-1.5">
+                              <button 
+                                onClick={() => handleApproveDevice(req)}
+                                className="px-3 py-1 bg-emerald-600 text-white font-bold rounded-lg text-xs"
+                              >
+                                Aprovar
+                              </button>
+                              <button 
+                                onClick={() => handleRejectDevice(req)}
+                                className="px-2 py-1 bg-rose-100 text-rose-800 font-bold rounded-lg text-xs"
+                              >
+                                Recusar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl flex items-center justify-between gap-2">
                     <div>
-                      <h4 className="font-bold text-slate-800 text-sm">Criar Outra Família</h4>
-                      <span className="text-xs text-slate-500">Gera um novo código aleatório.</span>
+                      <h4 className="font-bold text-slate-800 text-sm">Criar Outro Grupo Familiar</h4>
+                      <span className="text-xs text-slate-500">Gera um novo código exclusivo.</span>
                     </div>
                     <button
                       onClick={() => {
