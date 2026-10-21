@@ -10,7 +10,8 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <!-- Supabase JS Client Oficial -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 
@@ -27,14 +28,27 @@
 <body class="bg-slate-100 text-slate-900">
   <div id="root">
     <div style="padding: 24px; text-align: center; font-weight: bold; color: #475569;">
-      Carregando Sistema Financeiro...
+      Carregando v2.6.0...
     </div>
   </div>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
-    const APP_VERSION = "v2.5.0 (Gestão de Investimentos)";
+    const APP_VERSION = "v2.6.0 (Supabase Realtime & Fix Exclusão)";
+
+    // Configuração do Supabase
+const SUPABASE_URL = "https://ikxbpbapxlflmyfibjie.supabase.co";
+const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
+    
+    let supabase = null;
+    try {
+      if (window.supabase) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    } catch (e) {
+      console.error("Falha ao inicializar Supabase:", e);
+    }
 
     if (window.pdfjsLib) {
       try {
@@ -123,7 +137,7 @@
 
       const [editFamilyInput, setEditFamilyInput] = useState('');
       const [audioEnabled, setAudioEnabled] = useState(true);
-      const [syncStatus, setSyncStatus] = useState('Nuvem Ativa');
+      const [syncStatus, setSyncStatus] = useState('Supabase Conectado');
       const [isSyncing, setIsSyncing] = useState(false);
 
       const [currentMode, setCurrentMode] = useState('familia');
@@ -146,7 +160,7 @@
         try {
           const s = localStorage.getItem('planejamento_investimentos_db');
           return s ? JSON.parse(s) : [
-            { id: 'i1', name: 'Tesouro Selic 2029', type: 'Renda Fixa', amount: 100000, yieldRate: '10.75% a.a.' }
+            { id: 'inv_1001', name: 'Tesouro Selic 2029', type: 'Renda Fixa', amount: 100000, yieldRate: '10.75% a.a.' }
           ];
         } catch (e) { return []; }
       });
@@ -180,73 +194,106 @@
         } catch (e) {}
       }, [personalTx, familyTx, investments, userName, familyCode, isOwner, deviceStatus]);
 
-      const getCloudBucketKey = (code) => {
-        const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-        return `https://kvdb.io/6P4k8e7N2XbK9U3wL5qR1/${clean}_DB_V2`;
-      };
-
-      const pushToCloud = async (code, list, pending = pendingRequests, approved = approvedDevices, invList = investments) => {
-        if (!code) return;
+      // ENVIO DE DADOS PARA O SUPABASE
+      const pushToSupabase = async (code, list, invList, pending = pendingRequests, approved = approvedDevices) => {
+        if (!code || !supabase) return;
         setIsSyncing(true);
         try {
-          const payload = {
-            transactions: list,
-            investments: invList,
-            pending: pending,
-            approved: approved,
-            updatedAt: Date.now()
-          };
-          await fetch(getCloudBucketKey(code), {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
-          setSyncStatus('Sincronizado');
+          const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const { error } = await supabase
+            .from('family_data')
+            .upsert({
+              family_code: clean,
+              transactions: list,
+              investments: invList,
+              pending: pending,
+              approved: approved,
+              updated_at: new Date().toISOString()
+            });
+
+          if (error) throw error;
+          setSyncStatus('Supabase Salvo');
         } catch (e) {
+          console.warn("Falha no upsert do Supabase:", e);
           setSyncStatus('Local');
         } finally {
           setIsSyncing(false);
         }
       };
 
-      const pullFromCloud = async (code, notify = false) => {
+      // LEITURA DE DADOS DO SUPABASE
+      const pullFromSupabase = async (code, notify = false) => {
         const target = code || familyCode;
-        if (!target) return;
+        if (!target || !supabase) return;
         setIsSyncing(true);
         try {
-          const res = await fetch(getCloudBucketKey(target));
-          if (res.ok) {
-            const data = await res.json();
-            if (data) {
-              if (Array.isArray(data.transactions) && (isOwner || deviceStatus === 'APPROVED')) {
-                setFamilyTx(data.transactions);
-              }
-              if (Array.isArray(data.investments)) {
-                setInvestments(data.investments);
-              }
-              if (Array.isArray(data.pending)) {
-                setPendingRequests(data.pending);
-              }
-              if (Array.isArray(data.approved)) {
-                setApprovedDevices(data.approved);
-                if (data.approved.some(d => d.id === myDeviceId)) {
-                  setDeviceStatus('APPROVED');
-                  localStorage.setItem(`status_dev_${target}`, 'APPROVED');
-                }
-              }
-              setSyncStatus('Nuvem Conectada');
-              if (notify) speakText('Dados sincronizados.');
+          const clean = target.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const { data, error } = await supabase
+            .from('family_data')
+            .select('*')
+            .eq('family_code', clean)
+            .single();
+
+          if (error && error.code !== 'PGRST116') throw error;
+
+          if (data) {
+            if (Array.isArray(data.transactions) && (isOwner || deviceStatus === 'APPROVED')) {
+              setFamilyTx(data.transactions);
             }
+            if (Array.isArray(data.investments)) {
+              setInvestments(data.investments);
+            }
+            if (Array.isArray(data.pending)) {
+              setPendingRequests(data.pending);
+            }
+            if (Array.isArray(data.approved)) {
+              setApprovedDevices(data.approved);
+              if (data.approved.some(d => d.id === myDeviceId)) {
+                setDeviceStatus('APPROVED');
+                localStorage.setItem(`status_dev_${target}`, 'APPROVED');
+              }
+            }
+            setSyncStatus('Supabase Sincronizado');
+            if (notify) speakText('Dados sincronizados da nuvem.');
           }
-        } catch (e) {}
-        finally {
+        } catch (e) {
+          console.warn("Aviso na leitura Supabase:", e);
+        } finally {
           setIsSyncing(false);
         }
       };
 
+      // CANAL EM TEMPO REAL SUPABASE
       useEffect(() => {
-        pullFromCloud(familyCode);
-        const timer = setInterval(() => pullFromCloud(familyCode), 2500);
-        return () => clearInterval(timer);
+        pullFromSupabase(familyCode);
+
+        let channel = null;
+        if (supabase) {
+          const clean = familyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          channel = supabase
+            .channel(`realtime:${clean}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'family_data', filter: `family_code=eq.${clean}` }, (payload) => {
+              if (payload.new) {
+                if (Array.isArray(payload.new.transactions)) setFamilyTx(payload.new.transactions);
+                if (Array.isArray(payload.new.investments)) setInvestments(payload.new.investments);
+                if (Array.isArray(payload.new.pending)) setPendingRequests(payload.new.pending);
+                if (Array.isArray(payload.new.approved)) {
+                  setApprovedDevices(payload.new.approved);
+                  if (payload.new.approved.some(d => d.id === myDeviceId)) {
+                    setDeviceStatus('APPROVED');
+                  }
+                }
+              }
+            })
+            .subscribe();
+        }
+
+        const fallbackTimer = setInterval(() => pullFromSupabase(familyCode), 3500);
+
+        return () => {
+          clearInterval(fallbackTimer);
+          if (supabase && channel) supabase.removeChannel(channel);
+        };
       }, [familyCode, isOwner, deviceStatus]);
 
       const handleCreateNewFamily = () => {
@@ -259,7 +306,7 @@
         const initialApproved = [{ id: myDeviceId, name: userName, role: 'TITULAR' }];
         setApprovedDevices(initialApproved);
         setFamilyTx([]);
-        pushToCloud(newCode, [], [], initialApproved, investments);
+        pushToSupabase(newCode, [], investments, [], initialApproved);
         speakText(`Nova família criada com o código ${newCode}.`);
         alert(`Família Criada com Sucesso!\nCódigo: ${newCode}\nVocê é o Titular.`);
       };
@@ -283,26 +330,28 @@
 
         const newReq = { id: myDeviceId, name: userName, date: new Date().toLocaleTimeString('pt-BR') };
 
-        let currentChan = { transactions: [], investments: [], pending: [], approved: [] };
-        try {
-          const res = await fetch(getCloudBucketKey(clean));
-          if (res.ok) currentChan = await res.json();
-        } catch(e) {}
+        let currentPending = [];
+        let currentApproved = [];
+        let currentTx = [];
+        let currentInv = [];
 
-        const updatedPending = [...(currentChan.pending || []).filter(p => p.id !== myDeviceId), newReq];
-        
-        await fetch(getCloudBucketKey(clean), {
-          method: 'POST',
-          body: JSON.stringify({
-            ...currentChan,
-            pending: updatedPending
-          })
-        });
+        if (supabase) {
+          const { data } = await supabase.from('family_data').select('*').eq('family_code', clean).single();
+          if (data) {
+            currentPending = data.pending || [];
+            currentApproved = data.approved || [];
+            currentTx = data.transactions || [];
+            currentInv = data.investments || [];
+          }
+        }
+
+        const updatedPending = [...currentPending.filter(p => p.id !== myDeviceId), newReq];
+        await pushToSupabase(clean, currentTx, currentInv, updatedPending, currentApproved);
 
         setPendingRequests(updatedPending);
         setEditFamilyInput('');
         speakText('Solicitação enviada. Aguardando aprovação do titular.');
-        alert(`Solicitação enviada ao Titular da família ${clean}!\nAssim que aprovado, as contas serão exibidas.`);
+        alert(`Solicitação enviada ao Titular da família ${clean}!\nAssim que ele aprovar no aparelho dele, suas contas serão exibidas.`);
       };
 
       const handleApproveDevice = async (req) => {
@@ -310,15 +359,15 @@
         const updatedApproved = [...approvedDevices.filter(d => d.id !== req.id), { id: req.id, name: req.name, role: 'MEMBRO' }];
         setPendingRequests(updatedPending);
         setApprovedDevices(updatedApproved);
-        await pushToCloud(familyCode, familyTx, updatedPending, updatedApproved, investments);
+        await pushToSupabase(familyCode, familyTx, investments, updatedPending, updatedApproved);
         speakText(`Acesso aprovado para ${req.name}`);
-        alert(`Acesso aprovado para ${req.name}!`);
+        alert(`Acesso aprovado para ${req.name}! As contas já foram liberadas.`);
       };
 
       const handleRejectDevice = async (req) => {
         const updatedPending = pendingRequests.filter(p => p.id !== req.id);
         setPendingRequests(updatedPending);
-        await pushToCloud(familyCode, familyTx, updatedPending, approvedDevices, investments);
+        await pushToSupabase(familyCode, familyTx, investments, updatedPending, approvedDevices);
         speakText(`Solicitação recusada.`);
       };
 
@@ -350,12 +399,6 @@
         return investments.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
       }, [investments]);
 
-      const handleToggleMode = (mode) => {
-        setCurrentMode(mode);
-        if (mode === 'pessoal') speakText(`Minhas contas de ${userName}`);
-        else speakText(`Contas da família`);
-      };
-
       const handleAdd = (e) => {
         e.preventDefault();
         const parsed = parseMaskedCurrency(val);
@@ -365,7 +408,7 @@
         }
 
         const newTx = {
-          id: Date.now().toString(),
+          id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
           description: desc.trim(),
           amount: parsed,
           type: txType,
@@ -383,7 +426,7 @@
           }
           const updated = [newTx, ...familyTx];
           setFamilyTx(updated);
-          pushToCloud(familyCode, updated, pendingRequests, approvedDevices, investments);
+          pushToSupabase(familyCode, updated, investments);
         }
 
         setDesc('');
@@ -398,7 +441,7 @@
         } else {
           const updated = familyTx.filter(t => t.id !== id);
           setFamilyTx(updated);
-          pushToCloud(familyCode, updated, pendingRequests, approvedDevices, investments);
+          pushToSupabase(familyCode, updated, investments);
         }
         speakText(`${description} excluído.`);
       };
@@ -413,7 +456,7 @@
         }
 
         const newInv = {
-          id: Date.now().toString(),
+          id: 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
           name: invName.trim(),
           amount: parsed,
           type: invType,
@@ -422,21 +465,19 @@
 
         const updatedInv = [newInv, ...investments];
         setInvestments(updatedInv);
-        pushToCloud(familyCode, familyTx, pendingRequests, approvedDevices, updatedInv);
+        pushToSupabase(familyCode, familyTx, updatedInv);
 
         setInvName('');
         setInvAmount('');
         speakText(`Investimento de ${formatBRL(parsed)} registrado.`);
       };
 
-      // EXCLUSÃO DE INVESTIMENTO COM CONFIRMAÇÃO
+      // EXCLUSÃO DIRETA E CONFIÁVEL DE INVESTIMENTO (SEM TRAVA DE DIÁLOGO)
       const handleDeleteInvestment = (id, name, amount) => {
-        if (confirm(`Deseja realmente excluir a aplicação "${name}" no valor de ${formatBRL(amount)}?`)) {
-          const updatedInv = investments.filter(inv => inv.id !== id);
-          setInvestments(updatedInv);
-          pushToCloud(familyCode, familyTx, pendingRequests, approvedDevices, updatedInv);
-          speakText(`Aplicação ${name} excluída.`);
-        }
+        const updatedInv = investments.filter(inv => String(inv.id) !== String(id));
+        setInvestments(updatedInv);
+        pushToSupabase(familyCode, familyTx, updatedInv);
+        speakText(`Aplicação de ${name} removida.`);
       };
 
       const handleVoiceInput = () => {
@@ -633,7 +674,7 @@
                     Seu celular enviou a solicitação para a família <strong>{familyCode}</strong>. O Titular precisa clicar no botão <strong>"Aprovar"</strong> no painel de segurança do aparelho dele.
                   </p>
                   <button 
-                    onClick={() => pullFromCloud(familyCode, true)}
+                    onClick={() => pullFromSupabase(familyCode, true)}
                     className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl active:scale-95 shadow-md flex items-center justify-center gap-1.5 mx-auto"
                   >
                     <Icons.Refresh /> Verificar se já fui aprovado
@@ -742,7 +783,7 @@
                 </div>
               )}
 
-              {/* ABA: INVESTIMENTOS COM BOTÃO DE EXCLUIR */}
+              {/* ABA: INVESTIMENTOS COM EXCLUSÃO DIRETA E CONFIÁVEL */}
               {activeTab === 'investimentos' && (
                 <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
                   <div className="flex justify-between items-center">
@@ -756,12 +797,12 @@
                     <span className="text-xs mt-1 block opacity-95">Rendimento estimado: ~ R$ {(totalInvested * 0.0085).toFixed(2)} / mês</span>
                   </div>
 
-                  {/* FORMULÁRIO DE INVESTIMENTO */}
+                  {/* FORMULÁRIO */}
                   <form onSubmit={handleAddInvestment} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                     <h3 className="font-bold text-sm text-slate-800">Adicionar Investimento</h3>
                     <input 
                       type="text" 
-                      placeholder="Nome (Ex: Tesouro Selic, CDB Inter, Ações)" 
+                      placeholder="Nome (Ex: Tesouro Selic, CDB Inter, FIIs)" 
                       value={invName} 
                       onChange={(e) => setInvName(e.target.value)} 
                       className="w-full p-2.5 border border-slate-300 rounded-xl text-sm outline-none"
@@ -797,9 +838,9 @@
                     </button>
                   </form>
 
-                  {/* LISTA DE INVESTIMENTOS COM BOTÃO DE EXCLUIR */}
+                  {/* LISTA COM BOTÃO DE EXCLUIR DIRETO */}
                   <div className="space-y-2">
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 mt-2">Aplicações Registradas ({investments.length})</h3>
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 mt-2">Aplicações ({investments.length})</h3>
                     {investments.map(inv => (
                       <div key={inv.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center gap-2">
                         <div className="min-w-0 flex-1">
@@ -811,7 +852,7 @@
                           <button 
                             type="button"
                             onClick={() => handleDeleteInvestment(inv.id, inv.name, inv.amount)}
-                            className="p-2 text-slate-400 hover:text-rose-600 active:scale-90 transition-all rounded-lg"
+                            className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 active:scale-90 transition-all rounded-lg border border-rose-200"
                             title={`Excluir ${inv.name}`}
                           >
                             <Icons.Trash2 />
