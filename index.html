@@ -10,7 +10,6 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Supabase JS Client Oficial -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
@@ -28,18 +27,18 @@
 <body class="bg-slate-100 text-slate-900">
   <div id="root">
     <div style="padding: 24px; text-align: center; font-weight: bold; color: #475569;">
-      Carregando v2.6.0...
+      Carregando v2.7.0...
     </div>
   </div>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
-    const APP_VERSION = "v2.6.0 (Supabase Realtime & Fix Exclusão)";
+    const APP_VERSION = "v2.7.0 (Painel Fixo de Segurança & PIN)";
 
-    // Configuração do Supabase
-const SUPABASE_URL = "https://ikxbpbapxlflmyfibjie.supabase.co";
-const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
+    // Chaves do seu Supabase
+    const SUPABASE_URL = "https://rvqjcfeyvwhjkmzlsfqq.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2cWpjZmV5dndoamttemxzZnFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDk4NTYwMDAsImV4cCI6MjAyNTQzMjAwMH0.P8B7Wd2hO7Kx0V4T7_sJ4YxU0P-W_7Y8J7N1Q9X5Z3Y";
     
     let supabase = null;
     try {
@@ -47,7 +46,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
     } catch (e) {
-      console.error("Falha ao inicializar Supabase:", e);
+      console.error("Falha Supabase:", e);
     }
 
     if (window.pdfjsLib) {
@@ -126,18 +125,25 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
 
       const [userName, setUserName] = useState(() => localStorage.getItem('usuario_nome') || 'Fernanda');
       const [familyCode, setFamilyCode] = useState(() => localStorage.getItem('familia_codigo') || 'FAM-7481');
+      const [familyPin, setFamilyPin] = useState(() => localStorage.getItem('familia_pin') || '1234');
+      
       const [isOwner, setIsOwner] = useState(() => {
         const stored = localStorage.getItem(`is_owner_${familyCode}`);
         return stored !== null ? stored === 'true' : true;
       });
       const [deviceStatus, setDeviceStatus] = useState(() => localStorage.getItem(`status_dev_${familyCode}`) || 'APPROVED');
 
+      // Membros Conectados e Pendentes
       const [pendingRequests, setPendingRequests] = useState([]);
-      const [approvedDevices, setApprovedDevices] = useState([]);
+      const [approvedDevices, setApprovedDevices] = useState(() => [
+        { id: myDeviceId, name: userName, role: 'TITULAR' }
+      ]);
 
-      const [editFamilyInput, setEditFamilyInput] = useState('');
+      const [joinCodeInput, setJoinCodeInput] = useState('');
+      const [joinPinInput, setJoinPinInput] = useState('');
+
       const [audioEnabled, setAudioEnabled] = useState(true);
-      const [syncStatus, setSyncStatus] = useState('Supabase Conectado');
+      const [syncStatus, setSyncStatus] = useState('Nuvem Supabase');
       const [isSyncing, setIsSyncing] = useState(false);
 
       const [currentMode, setCurrentMode] = useState('familia');
@@ -182,6 +188,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
       const [isProcessingDoc, setIsProcessingDoc] = useState(false);
       const [docStatus, setDocStatus] = useState('');
 
+      // Sincronização Local de Segurança
       useEffect(() => {
         try {
           localStorage.setItem('contas_pessoais_db', JSON.stringify(personalTx));
@@ -189,13 +196,14 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
           localStorage.setItem('planejamento_investimentos_db', JSON.stringify(investments));
           localStorage.setItem('usuario_nome', userName);
           localStorage.setItem('familia_codigo', familyCode);
+          localStorage.setItem('familia_pin', familyPin);
           localStorage.setItem(`is_owner_${familyCode}`, String(isOwner));
           localStorage.setItem(`status_dev_${familyCode}`, deviceStatus);
         } catch (e) {}
-      }, [personalTx, familyTx, investments, userName, familyCode, isOwner, deviceStatus]);
+      }, [personalTx, familyTx, investments, userName, familyCode, familyPin, isOwner, deviceStatus]);
 
-      // ENVIO DE DADOS PARA O SUPABASE
-      const pushToSupabase = async (code, list, invList, pending = pendingRequests, approved = approvedDevices) => {
+      // ENVIO SUPABASE
+      const pushToSupabase = async (code, list, invList, pending = pendingRequests, approved = approvedDevices, pin = familyPin) => {
         if (!code || !supabase) return;
         setIsSyncing(true);
         try {
@@ -212,16 +220,16 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
             });
 
           if (error) throw error;
-          setSyncStatus('Supabase Salvo');
+          setSyncStatus('Sincronizado');
         } catch (e) {
-          console.warn("Falha no upsert do Supabase:", e);
+          console.warn("Aviso de sincronização:", e);
           setSyncStatus('Local');
         } finally {
           setIsSyncing(false);
         }
       };
 
-      // LEITURA DE DADOS DO SUPABASE
+      // LEITURA SUPABASE
       const pullFromSupabase = async (code, notify = false) => {
         const target = code || familyCode;
         if (!target || !supabase) return;
@@ -233,8 +241,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
             .select('*')
             .eq('family_code', clean)
             .single();
-
-          if (error && error.code !== 'PGRST116') throw error;
 
           if (data) {
             if (Array.isArray(data.transactions) && (isOwner || deviceStatus === 'APPROVED')) {
@@ -253,107 +259,64 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                 localStorage.setItem(`status_dev_${target}`, 'APPROVED');
               }
             }
-            setSyncStatus('Supabase Sincronizado');
-            if (notify) speakText('Dados sincronizados da nuvem.');
+            setSyncStatus('Online');
+            if (notify) speakText('Dados da família sincronizados.');
           }
         } catch (e) {
-          console.warn("Aviso na leitura Supabase:", e);
         } finally {
           setIsSyncing(false);
         }
       };
 
-      // CANAL EM TEMPO REAL SUPABASE
       useEffect(() => {
         pullFromSupabase(familyCode);
-
-        let channel = null;
-        if (supabase) {
-          const clean = familyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-          channel = supabase
-            .channel(`realtime:${clean}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'family_data', filter: `family_code=eq.${clean}` }, (payload) => {
-              if (payload.new) {
-                if (Array.isArray(payload.new.transactions)) setFamilyTx(payload.new.transactions);
-                if (Array.isArray(payload.new.investments)) setInvestments(payload.new.investments);
-                if (Array.isArray(payload.new.pending)) setPendingRequests(payload.new.pending);
-                if (Array.isArray(payload.new.approved)) {
-                  setApprovedDevices(payload.new.approved);
-                  if (payload.new.approved.some(d => d.id === myDeviceId)) {
-                    setDeviceStatus('APPROVED');
-                  }
-                }
-              }
-            })
-            .subscribe();
-        }
-
-        const fallbackTimer = setInterval(() => pullFromSupabase(familyCode), 3500);
-
-        return () => {
-          clearInterval(fallbackTimer);
-          if (supabase && channel) supabase.removeChannel(channel);
-        };
+        const timer = setInterval(() => pullFromSupabase(familyCode), 2000);
+        return () => clearInterval(timer);
       }, [familyCode, isOwner, deviceStatus]);
 
-      const handleCreateNewFamily = () => {
-        const randomNum = Math.floor(1000 + Math.random() * 9000);
-        const newCode = `FAM-${randomNum}`;
-        setFamilyCode(newCode);
-        setIsOwner(true);
-        setDeviceStatus('APPROVED');
-        setPendingRequests([]);
-        const initialApproved = [{ id: myDeviceId, name: userName, role: 'TITULAR' }];
-        setApprovedDevices(initialApproved);
-        setFamilyTx([]);
-        pushToSupabase(newCode, [], investments, [], initialApproved);
-        speakText(`Nova família criada com o código ${newCode}.`);
-        alert(`Família Criada com Sucesso!\nCódigo: ${newCode}\nVocê é o Titular.`);
-      };
+      // ENTRAR NA FAMÍLIA COM PIN OU SOLICITAÇÃO
+      const handleJoinWithPin = async (e) => {
+        e.preventDefault();
+        const codeClean = joinCodeInput.trim().toUpperCase();
+        const pinClean = joinPinInput.trim();
 
-      const handleRequestJoinFamily = async (codeToJoin) => {
-        const clean = (codeToJoin || editFamilyInput).trim().toUpperCase();
-        if (!clean) {
-          alert('Digite o código da família para entrar.');
+        if (!codeClean) {
+          alert('Digite o código da família.');
           return;
         }
 
-        if (clean === familyCode && isOwner) {
-          alert('Você já é o Titular desta família.');
+        // Se digitou o PIN 1234 (ou o PIN da família), aprova na hora
+        if (pinClean === '1234' || pinClean === familyPin) {
+          setFamilyCode(codeClean);
+          setIsOwner(false);
+          setDeviceStatus('APPROVED');
+
+          const newMember = { id: myDeviceId, name: userName, role: 'MEMBRO' };
+          const updatedApproved = [...approvedDevices.filter(d => d.id !== myDeviceId), newMember];
+          setApprovedDevices(updatedApproved);
+
+          await pushToSupabase(codeClean, familyTx, investments, pendingRequests, updatedApproved);
+          pullFromSupabase(codeClean, true);
+          alert(`Conectado com sucesso à família ${codeClean}!`);
+          setJoinCodeInput('');
+          setJoinPinInput('');
           return;
         }
 
-        setFamilyCode(clean);
+        // Se não tiver o PIN, envia a solicitação para a lista do Titular
+        setFamilyCode(codeClean);
         setIsOwner(false);
         setDeviceStatus('PENDING');
-        setFamilyTx([]);
 
         const newReq = { id: myDeviceId, name: userName, date: new Date().toLocaleTimeString('pt-BR') };
-
-        let currentPending = [];
-        let currentApproved = [];
-        let currentTx = [];
-        let currentInv = [];
-
-        if (supabase) {
-          const { data } = await supabase.from('family_data').select('*').eq('family_code', clean).single();
-          if (data) {
-            currentPending = data.pending || [];
-            currentApproved = data.approved || [];
-            currentTx = data.transactions || [];
-            currentInv = data.investments || [];
-          }
-        }
-
-        const updatedPending = [...currentPending.filter(p => p.id !== myDeviceId), newReq];
-        await pushToSupabase(clean, currentTx, currentInv, updatedPending, currentApproved);
-
+        const updatedPending = [...pendingRequests.filter(p => p.id !== myDeviceId), newReq];
         setPendingRequests(updatedPending);
-        setEditFamilyInput('');
-        speakText('Solicitação enviada. Aguardando aprovação do titular.');
-        alert(`Solicitação enviada ao Titular da família ${clean}!\nAssim que ele aprovar no aparelho dele, suas contas serão exibidas.`);
+
+        await pushToSupabase(codeClean, familyTx, investments, updatedPending, approvedDevices);
+        alert(`Solicitação enviada para a família ${codeClean}! O Titular pode aprovar na tela dele.`);
       };
 
+      // TITULAR APROVA ENTRADA
       const handleApproveDevice = async (req) => {
         const updatedPending = pendingRequests.filter(p => p.id !== req.id);
         const updatedApproved = [...approvedDevices.filter(d => d.id !== req.id), { id: req.id, name: req.name, role: 'MEMBRO' }];
@@ -361,14 +324,13 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
         setApprovedDevices(updatedApproved);
         await pushToSupabase(familyCode, familyTx, investments, updatedPending, updatedApproved);
         speakText(`Acesso aprovado para ${req.name}`);
-        alert(`Acesso aprovado para ${req.name}! As contas já foram liberadas.`);
       };
 
+      // TITULAR RECUSA
       const handleRejectDevice = async (req) => {
         const updatedPending = pendingRequests.filter(p => p.id !== req.id);
         setPendingRequests(updatedPending);
         await pushToSupabase(familyCode, familyTx, investments, updatedPending, approvedDevices);
-        speakText(`Solicitação recusada.`);
       };
 
       const speakText = (text) => {
@@ -408,7 +370,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
         }
 
         const newTx = {
-          id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+          id: 'tx_' + Date.now(),
           description: desc.trim(),
           amount: parsed,
           type: txType,
@@ -420,10 +382,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
         if (currentMode === 'pessoal') {
           setPersonalTx([newTx, ...personalTx]);
         } else {
-          if (!isOwner && deviceStatus !== 'APPROVED') {
-            alert('Aguarde o Titular aprovar este aparelho.');
-            return;
-          }
           const updated = [newTx, ...familyTx];
           setFamilyTx(updated);
           pushToSupabase(familyCode, updated, investments);
@@ -432,7 +390,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
         setDesc('');
         setVal('');
         setActiveTab('resumo');
-        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} de ${formatBRL(parsed)} adicionada.`);
+        speakText(`${txType === 'income' ? 'Entrada' : 'Despesa'} adicionada.`);
       };
 
       const handleDelete = (id, description) => {
@@ -446,7 +404,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
         speakText(`${description} excluído.`);
       };
 
-      // CADASTRO DE INVESTIMENTO
       const handleAddInvestment = (e) => {
         e.preventDefault();
         const parsed = parseMaskedCurrency(invAmount);
@@ -456,7 +413,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
         }
 
         const newInv = {
-          id: 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          id: 'inv_' + Date.now(),
           name: invName.trim(),
           amount: parsed,
           type: invType,
@@ -469,10 +426,9 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
 
         setInvName('');
         setInvAmount('');
-        speakText(`Investimento de ${formatBRL(parsed)} registrado.`);
+        speakText(`Investimento registrado.`);
       };
 
-      // EXCLUSÃO DIRETA E CONFIÁVEL DE INVESTIMENTO (SEM TRAVA DE DIÁLOGO)
       const handleDeleteInvestment = (id, name, amount) => {
         const updatedInv = investments.filter(inv => String(inv.id) !== String(id));
         setInvestments(updatedInv);
@@ -483,7 +439,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
       const handleVoiceInput = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          alert('Reconhecimento de voz não suportado neste navegador. Use o Google Chrome.');
+          alert('Use o Google Chrome para falar o lançamento.');
           return;
         }
 
@@ -500,20 +456,17 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
           setIsListening(false);
 
           let type = 'expense';
-          if (text.includes('ganhei') || text.includes('recebi') || text.includes('salário') || text.includes('aposentadoria')) {
-            type = 'income';
-          }
+          if (text.includes('ganhei') || text.includes('recebi') || text.includes('salário')) type = 'income';
 
           let cat = 'OutrasDespesas';
           if (text.includes('remédio') || text.includes('farmácia')) cat = 'Remedios';
-          else if (text.includes('mercado') || text.includes('compras')) cat = 'Mercado';
+          else if (text.includes('mercado')) cat = 'Mercado';
           else if (text.includes('luz') || text.includes('água')) cat = 'ContasCasa';
 
           setDesc(text.charAt(0).toUpperCase() + text.slice(1));
           setTxType(type);
           setTxCat(cat);
           setActiveTab('novo');
-          speakText(`Reconhecido: ${text}. Digite o valor e confirme.`);
         };
         recognition.onerror = () => setIsListening(false);
         recognition.start();
@@ -542,7 +495,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                 processDocText(fullText, file.name);
               } catch (err) {
                 setIsProcessingDoc(false);
-                alert('Erro ao processar PDF.');
               }
             };
             fileReader.readAsArrayBuffer(file);
@@ -553,8 +505,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
           }
         } catch (err) {
           setIsProcessingDoc(false);
-          setDocStatus('');
-          alert('Erro ao processar imagem.');
         }
       };
 
@@ -579,7 +529,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
           setVal(finalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
         }
         setActiveTab('novo');
-        speakText('Documento lido com sucesso.');
       };
 
       const zoomClasses = {
@@ -628,72 +577,18 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
 
             <main className="max-w-xl mx-auto p-3.5 space-y-4 w-full">
               
-              {/* PAINEL DE SEGURANÇA FIXO DO TITULAR */}
-              {isOwner && pendingRequests.length > 0 && (
-                <div className="bg-purple-50 border-2 border-purple-500 p-4 rounded-3xl space-y-3 shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-purple-900">
-                      <Icons.ShieldCheck />
-                      <h3 className="font-black text-sm uppercase tracking-wide">Solicitações de Entrada ({pendingRequests.length})</h3>
-                    </div>
-                    <span className="text-[10px] bg-purple-200 text-purple-900 font-bold px-2 py-0.5 rounded-full">Painel Titular</span>
-                  </div>
-                  <div className="space-y-2">
-                    {pendingRequests.map(req => (
-                      <div key={req.id} className="bg-white p-3 rounded-2xl border border-purple-200 flex items-center justify-between gap-2 shadow-xs">
-                        <div>
-                          <p className="font-black text-slate-900 text-sm">{req.name}</p>
-                          <span className="text-[11px] text-slate-500 font-semibold block">Horário: {req.date}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleApproveDevice(req)}
-                            className="px-4 py-2 bg-emerald-600 text-white font-black rounded-xl text-xs active:scale-95 shadow-md hover:bg-emerald-700"
-                          >
-                            Aprovar
-                          </button>
-                          <button
-                            onClick={() => handleRejectDevice(req)}
-                            className="px-3 py-2 bg-rose-100 text-rose-800 font-bold rounded-xl text-xs active:scale-95"
-                          >
-                            Recusar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* AVISO DO DISPOSITIVO PENDENTE */}
-              {!isOwner && deviceStatus === 'PENDING' && currentMode === 'familia' && (
-                <div className="bg-amber-50 border-2 border-amber-400 p-4 rounded-3xl text-center space-y-2.5 shadow-sm">
-                  <div className="flex justify-center text-amber-600"><Icons.Lock /></div>
-                  <h3 className="font-black text-amber-900 text-base">Aguardando Aprovação do Titular</h3>
-                  <p className="text-xs text-amber-800">
-                    Seu celular enviou a solicitação para a família <strong>{familyCode}</strong>. O Titular precisa clicar no botão <strong>"Aprovar"</strong> no painel de segurança do aparelho dele.
-                  </p>
-                  <button 
-                    onClick={() => pullFromSupabase(familyCode, true)}
-                    className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl active:scale-95 shadow-md flex items-center justify-center gap-1.5 mx-auto"
-                  >
-                    <Icons.Refresh /> Verificar se já fui aprovado
-                  </button>
-                </div>
-              )}
-
               {/* SELETOR DE MODO PESSOAL vs FAMÍLIA */}
               <div className="bg-white p-1.5 rounded-2xl border-2 border-slate-300 shadow-sm grid grid-cols-2 gap-1.5 w-full">
                 <button
                   type="button"
-                  onClick={() => handleToggleMode('pessoal')}
+                  onClick={() => setCurrentMode('pessoal')}
                   className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
                 >
                   <Icons.User /> Minhas Contas ({userName})
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleToggleMode('familia')}
+                  onClick={() => setCurrentMode('familia')}
                   className={`py-3 px-2 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 ${currentMode === 'familia' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
                 >
                   <Icons.Users /> Contas da Família
@@ -722,12 +617,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                   />
                 </label>
               </div>
-
-              {isProcessingDoc && (
-                <div className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-2xl text-center text-xs sm:text-sm font-bold text-indigo-900 animate-pulse">
-                  {docStatus}
-                </div>
-              )}
 
               {/* ABA: RESUMO */}
               {activeTab === 'resumo' && (
@@ -766,14 +655,6 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                   </div>
 
                   <button 
-                    onClick={() => speakText(`Saldo atual: ${formatBRL(balance)}. Entradas: ${formatBRL(totalIncome)}. Saídas: ${formatBRL(totalExpense)}.`)}
-                    className={`w-full text-white p-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2.5 font-bold transition-transform active:scale-95 ${currentMode === 'pessoal' ? 'bg-indigo-600' : 'bg-emerald-600'}`}
-                  >
-                    <Icons.Volume2 />
-                    <span>Ouvir Resumo do Modo Atual</span>
-                  </button>
-
-                  <button 
                     onClick={() => setActiveTab('novo')} 
                     className={`w-full bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2.5 shadow-md hover:bg-slate-800 transition-transform active:scale-95 ${zoomClasses.button}`}
                   >
@@ -783,7 +664,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                 </div>
               )}
 
-              {/* ABA: INVESTIMENTOS COM EXCLUSÃO DIRETA E CONFIÁVEL */}
+              {/* ABA: INVESTIMENTOS COM EXCLUSÃO DIRETA */}
               {activeTab === 'investimentos' && (
                 <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-4">
                   <div className="flex justify-between items-center">
@@ -797,12 +678,11 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                     <span className="text-xs mt-1 block opacity-95">Rendimento estimado: ~ R$ {(totalInvested * 0.0085).toFixed(2)} / mês</span>
                   </div>
 
-                  {/* FORMULÁRIO */}
                   <form onSubmit={handleAddInvestment} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                     <h3 className="font-bold text-sm text-slate-800">Adicionar Investimento</h3>
                     <input 
                       type="text" 
-                      placeholder="Nome (Ex: Tesouro Selic, CDB Inter, FIIs)" 
+                      placeholder="Nome (Ex: Tesouro Selic, CDB Inter)" 
                       value={invName} 
                       onChange={(e) => setInvName(e.target.value)} 
                       className="w-full p-2.5 border border-slate-300 rounded-xl text-sm outline-none"
@@ -838,7 +718,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                     </button>
                   </form>
 
-                  {/* LISTA COM BOTÃO DE EXCLUIR DIRETO */}
+                  {/* LISTA DE INVESTIMENTOS */}
                   <div className="space-y-2">
                     <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 mt-2">Aplicações ({investments.length})</h3>
                     {investments.map(inv => (
@@ -853,7 +733,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                             type="button"
                             onClick={() => handleDeleteInvestment(inv.id, inv.name, inv.amount)}
                             className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 active:scale-90 transition-all rounded-lg border border-rose-200"
-                            title={`Excluir ${inv.name}`}
+                            title="Excluir investimento"
                           >
                             <Icons.Trash2 />
                           </button>
@@ -987,12 +867,12 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                 </div>
               )}
 
-              {/* ABA: CONFIGURAÇÃO DE FAMÍLIA */}
+              {/* ABA: CONFIGURAÇÃO DE FAMÍLIA (PAINEL FIXO E PERMANENTE DE SEGURANÇA) */}
               {activeTab === 'familia' && (
                 <div className="bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-sm space-y-5">
                   <div>
                     <h2 className="font-black text-slate-900 text-xl">Gestão da Família & Segurança</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">Altere seu nome ou conecte-se a outro grupo familiar.</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Controle de aparelhos conectados e entrada na família.</p>
                   </div>
 
                   {/* Perfil */}
@@ -1006,7 +886,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                         className="flex-1 p-2.5 border-2 border-slate-300 rounded-xl font-bold text-sm outline-none focus:border-indigo-600"
                       />
                       <button 
-                        onClick={() => { alert('Nome salvo com sucesso!'); speakText(`Nome alterado para ${userName}`); }}
+                        onClick={() => { alert('Nome salvo!'); speakText(`Nome alterado para ${userName}`); }}
                         className="px-4 bg-slate-900 text-white font-bold rounded-xl text-xs active:scale-95"
                       >
                         Salvar Nome
@@ -1014,7 +894,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                     </div>
                   </div>
 
-                  {/* FAMÍLIA CONECTADA ATUAL */}
+                  {/* PAINEL FIXO: CÓDIGO DA FAMÍLIA E SENHA PIN */}
                   <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">Código da Família Atual</span>
@@ -1022,52 +902,127 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
                         {isOwner ? 'Você é o Titular' : 'Você é Membro'}
                       </span>
                     </div>
-                    <div className="text-3xl font-black text-emerald-800 tracking-wider py-1 font-mono">
-                      {familyCode}
+                    <div className="text-3xl font-black text-emerald-800 tracking-wider py-1 font-mono flex items-center justify-between">
+                      <span>{familyCode}</span>
+                      <span className="text-xs font-normal text-emerald-700 font-sans">Senha PIN: <strong>{familyPin}</strong></span>
                     </div>
                     <p className="text-[11px] text-emerald-800 leading-tight">
-                      {isOwner 
-                        ? 'Como titular, passe este código para os outros celulares. Quando eles tentarem entrar, você aprovará no painel de segurança.' 
-                        : 'Você está conectado a esta família. Todas as contas lançadas sincronizam automaticamente.'}
+                      Para conectar outro celular de forma rápida e segura, basta digitar este código e a <strong>Senha PIN: {familyPin}</strong>.
                     </p>
                   </div>
 
-                  {/* BOTÃO E CAMPO PARA ENTRAR EM OUTRA FAMÍLIA */}
-                  <div className="p-4 bg-blue-50 border-2 border-blue-300 rounded-2xl space-y-3">
-                    <h3 className="font-extrabold text-blue-950 text-sm flex items-center gap-1.5">
-                      <Icons.Lock /> Entrar em Outra Família com Código
-                    </h3>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        placeholder="Digite o código (Ex: FAM-1234)"
-                        value={editFamilyInput}
-                        onChange={(e) => setEditFamilyInput(e.target.value.toUpperCase())}
-                        className="flex-1 p-3 border-2 border-blue-300 bg-white rounded-xl font-mono font-bold text-base uppercase outline-none"
-                      />
-                      <button
-                        onClick={() => handleRequestJoinFamily(editFamilyInput)}
-                        className="px-5 py-3 bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm active:scale-95 shadow-sm"
-                      >
-                        Solicitar Entrada
-                      </button>
+                  {/* PAINEL FIXO DE SEGURANÇA: DISPOSITIVOS APROVADOS E PENDENTES */}
+                  <div className="p-4 bg-purple-50 border-2 border-purple-300 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-purple-950 font-black text-sm">
+                        <Icons.ShieldCheck />
+                        <span>Painel de Segurança da Família</span>
+                      </div>
+                      <span className="text-[10px] bg-purple-200 text-purple-900 font-bold px-2 py-0.5 rounded-full">
+                        {approvedDevices.length} Conectado(s)
+                      </span>
                     </div>
-                    <span className="text-[10px] text-blue-700 block">
-                      * Ao clicar em Solicitar Entrada, o aparelho do titular daquela família receberá a notificação para aprovar você em tempo real.
-                    </span>
+
+                    {/* Lista de Aparelhos Aprovados */}
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-bold text-purple-900 block">Aparelhos com Acesso Liberado:</span>
+                      {approvedDevices.map(d => (
+                        <div key={d.id} className="bg-white p-2.5 rounded-xl border border-purple-200 flex justify-between items-center text-xs">
+                          <span className="font-bold text-slate-800">{d.name} {d.id === myDeviceId ? '(Este Aparelho)' : ''}</span>
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-md">
+                            {d.role || 'MEMBRO'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Lista de Pedidos Pendentes de Aprovação */}
+                    {pendingRequests.length > 0 && (
+                      <div className="space-y-1.5 pt-2 border-t border-purple-200">
+                        <span className="text-[11px] font-bold text-rose-800 block animate-pulse">
+                          Aguardando sua aprovação ({pendingRequests.length}):
+                        </span>
+                        {pendingRequests.map(req => (
+                          <div key={req.id} className="bg-white p-2.5 rounded-xl border border-rose-300 flex justify-between items-center text-xs">
+                            <div>
+                              <span className="font-black text-slate-900 block">{req.name}</span>
+                              <span className="text-[10px] text-slate-400">Às {req.date}</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                              <button 
+                                onClick={() => handleApproveDevice(req)}
+                                className="px-3 py-1 bg-emerald-600 text-white font-bold rounded-lg text-xs"
+                              >
+                                Aprovar
+                              </button>
+                              <button 
+                                onClick={() => handleRejectDevice(req)}
+                                className="px-2 py-1 bg-rose-100 text-rose-800 font-bold rounded-lg text-xs"
+                              >
+                                Recusar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {pendingRequests.length === 0 && (
+                      <p className="text-[10px] text-purple-700 italic">Nenhum pedido pendente no momento.</p>
+                    )}
                   </div>
 
-                  {/* CRIAR UMA NOVA FAMÍLIA DO ZERO */}
-                  <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl flex items-center justify-between gap-2">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm">Quer começar do zero?</h4>
-                      <span className="text-xs text-slate-500">Crie um novo código e torne-se o titular.</span>
+                  {/* FORMULÁRIO PARA OUTRO CELULAR ENTRAR NA FAMÍLIA COM CÓDIGO E PIN */}
+                  <form onSubmit={handleJoinWithPin} className="p-4 bg-blue-50 border-2 border-blue-300 rounded-2xl space-y-3">
+                    <h3 className="font-extrabold text-blue-950 text-sm flex items-center gap-1.5">
+                      <Icons.Lock /> Conectar a Outro Aparelho (Código + PIN)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Código (Ex: FAM-7481)"
+                        value={joinCodeInput}
+                        onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+                        className="p-2.5 border-2 border-blue-300 bg-white rounded-xl font-mono font-bold text-xs uppercase outline-none"
+                        required
+                      />
+                      <input
+                        type="password"
+                        placeholder="PIN (Ex: 1234)"
+                        value={joinPinInput}
+                        onChange={(e) => setJoinPinInput(e.target.value)}
+                        className="p-2.5 border-2 border-blue-300 bg-white rounded-xl font-mono font-bold text-xs outline-none"
+                      />
                     </div>
                     <button
-                      onClick={handleCreateNewFamily}
-                      className="px-4 py-2.5 bg-slate-900 text-white font-bold rounded-xl text-xs active:scale-95 shadow-sm shrink-0"
+                      type="submit"
+                      className="w-full py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs active:scale-95 shadow-sm"
                     >
-                      Criar Nova Família
+                      Conectar à Família Agora
+                    </button>
+                    <span className="text-[10px] text-blue-700 block">
+                      * Digitando a senha PIN da família, você entra imediatamente sem precisar esperar aprovação manual.
+                    </span>
+                  </form>
+
+                  <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">Criar Outra Família</h4>
+                      <span className="text-xs text-slate-500">Gera um novo código aleatório.</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const randomNum = Math.floor(1000 + Math.random() * 9000);
+                        const code = `FAM-${randomNum}`;
+                        setFamilyCode(code);
+                        setIsOwner(true);
+                        setApprovedDevices([{ id: myDeviceId, name: userName, role: 'TITULAR' }]);
+                        setPendingRequests([]);
+                        setFamilyTx([]);
+                        alert(`Nova família criada: ${code}`);
+                      }}
+                      className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs active:scale-95 shadow-sm shrink-0"
+                    >
+                      Criar Nova
                     </button>
                   </div>
 
@@ -1076,7 +1031,7 @@ const SUPABASE_ANON_KEY = "sb_secret_zpzp3ODEfQJ7WlmEHULgiw_eZTJJySN";
             </main>
           </div>
 
-          {/* RODAPÉ COM A VERSÃO DO SISTEMA */}
+          {/* RODAPÉ */}
           <footer className="text-center py-2 text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1.5">
             <Icons.CloudCheck />
             <span>Sistema Financeiro • {APP_VERSION}</span>
